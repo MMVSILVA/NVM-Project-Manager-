@@ -46,7 +46,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && 
-        ((request.auth.token.email == "mmvsilva@firjan.com.br" || request.auth.token.email == "vasouza@firjan.com.br" || request.auth.token.email == "marcio.s@docente.firjan.senai.br") && request.auth.token.email_verified == true);
+        (request.auth.token.email == "mmvsilva@firjan.com.br" || request.auth.token.email == "vasouza@firjan.com.br" || request.auth.token.email == "marcio.s@docente.firjan.senai.br" || request.auth.token.email == "marcio.v.silva@docente.firjan.senai.br");
     }
 
     function isOwner(userId) {
@@ -79,6 +79,12 @@ service cloud.firestore {
     // ===============================================================
     // Rules
     // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
 
     match /projects/{projectId} {
       allow read: if isDocOwner() || isAdmin();

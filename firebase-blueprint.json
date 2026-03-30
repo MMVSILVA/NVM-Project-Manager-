@@ -50,6 +50,7 @@
         "uid": { "type": "string" },
         "name": { "type": "string" },
         "matricula": { "type": "string" },
+        "telefone": { "type": "string" },
         "photoURL": { "type": "string" },
         "email": { "type": "string" }
       },

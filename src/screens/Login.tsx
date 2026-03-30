@@ -1,25 +1,49 @@
 import React, { useState } from 'react';
 import { auth, loginWithGoogle, logout, loginWithEmail, registerWithEmail, saveUserProfile } from '../services/firebase';
-import { LogIn, GraduationCap, Mail, Lock, UserPlus, User, Hash, Camera } from 'lucide-react';
+import { LogIn, GraduationCap, Mail, Lock, UserPlus, User, Hash, Camera, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'email' | 'register'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [matricula, setMatricula] = useState('');
+  const [telefone, setTelefone] = useState('');
   const [photoURL, setPhotoURL] = useState('');
 
   const validateEmail = (email: string) => {
-    return email.endsWith('@firjan.com.br');
+    return email.endsWith('@firjan.com.br') || email.endsWith('@docente.firjan.senai.br');
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) { // 1MB limit for base64
+        setError('A foto deve ter no máximo 1MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoURL(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (!validateEmail(email)) {
-      alert('Acesso restrito. Por favor, utilize um e-mail corporativo @firjan.com.br');
+      setError('Acesso restrito. Por favor, utilize um e-mail corporativo @firjan.com.br');
+      return;
+    }
+
+    if (mode === 'register' && password.length < 8) {
+      setError('A senha deve ter no mínimo 8 dígitos');
       return;
     }
 
@@ -31,6 +55,7 @@ export default function Login() {
         await saveUserProfile(user.uid, {
           name,
           matricula,
+          telefone,
           photoURL,
           email
         });
@@ -39,7 +64,13 @@ export default function Login() {
       }
     } catch (error: any) {
       console.error("Auth Error:", error);
-      alert(error.message || 'Erro ao autenticar');
+      let message = 'Erro ao autenticar';
+      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        message = 'E-mail ou senha incorretos';
+      } else if (error.code === 'auth/email-already-in-use') {
+        message = 'Este e-mail já está em uso';
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -72,6 +103,19 @@ export default function Login() {
             {mode === 'register' ? 'Cadastro de Professor' : 'Login Corporativo'}
           </h2>
 
+          <AnimatePresence>
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-xl mb-6 text-sm font-bold"
+              >
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {mode === 'register' && (
               <>
@@ -98,14 +142,34 @@ export default function Login() {
                   />
                 </div>
                 <div className="relative">
-                  <Camera className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                   <input 
-                    type="text"
-                    placeholder="URL da Foto de Perfil"
-                    value={photoURL}
-                    onChange={(e) => setPhotoURL(e.target.value)}
+                    type="tel"
+                    placeholder="Telefone/WhatsApp (Ex: 24999999999)"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    required
                     className="w-full bg-black/50 border border-white/10 rounded-xl pl-12 pr-4 py-4 focus:outline-none focus:border-neon-purple transition-all"
                   />
+                </div>
+                <div className="relative">
+                  <Camera className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <div className="w-full bg-black/50 border border-white/10 rounded-xl pl-12 pr-4 py-4 flex items-center justify-between">
+                    <span className="text-gray-500 text-sm truncate">
+                      {photoURL ? 'Foto selecionada' : 'Foto de Perfil'}
+                    </span>
+                    <input 
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                    {photoURL && (
+                      <div className="w-8 h-8 rounded-full overflow-hidden border border-neon-purple">
+                        <img src={photoURL} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </>
             )}

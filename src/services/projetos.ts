@@ -86,7 +86,14 @@ export const getProjects = (callback: (projects: any[]) => void) => {
   const path = 'projects';
   if (!auth.currentUser) return () => {};
   
-  const q = query(collection(db, path), where('userId', '==', auth.currentUser.uid));
+  const adminEmails = ['mmvsilva@firjan.com.br', 'vasouza@firjan.com.br', 'marcio.s@docente.firjan.senai.br', 'marcio.v.silva@docente.firjan.senai.br'];
+  let q;
+  
+  if (auth.currentUser.email && adminEmails.includes(auth.currentUser.email)) {
+    q = query(collection(db, path));
+  } else {
+    q = query(collection(db, path), where('userId', '==', auth.currentUser.uid));
+  }
   
   return onSnapshot(q, (snapshot) => {
     const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

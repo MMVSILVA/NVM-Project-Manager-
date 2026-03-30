@@ -18,7 +18,18 @@ interface Project {
   endDate: string;
   approvalProfessor: boolean;
   approvalBiblioteca: boolean;
+  userId: string;
   professorPhoto?: string;
+  // Canvas Fields
+  canvasParceiros?: string;
+  canvasAtividades?: string;
+  canvasRecursos?: string;
+  canvasProposta?: string;
+  canvasRelacionamento?: string;
+  canvasCanais?: string;
+  canvasSegmentos?: string;
+  canvasCustos?: string;
+  canvasReceitas?: string;
   bmCanvas?: string;
   bmCanvasFile?: string;
   relatorio?: string;
@@ -40,10 +51,22 @@ export default function Dashboard() {
   const [loadingIA, setLoadingIA] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [viewAll, setViewAll] = useState(false);
   const navigate = useNavigate();
 
+  const isAdmin = auth.currentUser?.email === 'mmvsilva@firjan.com.br' || 
+                  auth.currentUser?.email === 'vasouza@firjan.com.br' || 
+                  auth.currentUser?.email === 'marcio.s@docente.firjan.senai.br' ||
+                  auth.currentUser?.email === 'marcio.v.silva@docente.firjan.senai.br';
+
   useEffect(() => {
-    const unsubscribe = getProjects(setProjects);
+    const unsubscribe = getProjects((projs) => {
+      if (isAdmin && !viewAll) {
+        setProjects(projs.filter(p => p.userId === auth.currentUser?.uid));
+      } else {
+        setProjects(projs);
+      }
+    });
     
     const fetchProfile = async () => {
       if (auth.currentUser) {
@@ -54,7 +77,7 @@ export default function Dashboard() {
     fetchProfile();
 
     return () => unsubscribe();
-  }, []);
+  }, [viewAll, isAdmin]);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,7 +194,16 @@ export default function Dashboard() {
     XLSX.utils.book_append_sheet(wb, wsDash, "Dashboard");
 
     // 4. Download File
-    XLSX.writeFile(wb, `Relatorio_Geral_Projetos_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Relatorio_Geral_Projetos_${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const filteredProjects = projects.filter(p => 
@@ -193,23 +225,23 @@ export default function Dashboard() {
 
         <div className="flex items-center gap-4">
           {userProfile && (
-            <div className="flex items-center gap-3 px-4 py-2 bg-dark-card rounded-full border border-white/10">
-              <div className="w-10 h-10 rounded-full overflow-hidden border border-neon-purple/30">
+            <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(188,19,254,0.3)]">
                 {userProfile.photoURL ? (
                   <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple font-bold">
+                  <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple text-xl font-bold">
                     {userProfile.name?.charAt(0)}
                   </div>
                 )}
               </div>
-              <div className="flex flex-col">
+              <div className="flex flex-col items-center">
                 <span className="text-sm font-bold text-white leading-none">{userProfile.name}</span>
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Mat: {userProfile.matricula}</span>
               </div>
             </div>
           )}
-          {(auth.currentUser?.email === 'mmvsilva@firjan.com.br' || auth.currentUser?.email === 'vasouza@firjan.com.br') && (
+          {(auth.currentUser?.email === 'mmvsilva@firjan.com.br' || auth.currentUser?.email === 'vasouza@firjan.com.br' || auth.currentUser?.email === 'marcio.s@docente.firjan.senai.br') && (
             <button 
               onClick={generateGlobalReport}
               className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all text-sm font-bold"
@@ -286,16 +318,6 @@ export default function Dashboard() {
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Foto do Professor (URL)</label>
-                  <input 
-                    type="text" 
-                    value={professorPhoto}
-                    onChange={(e) => setProfessorPhoto(e.target.value)}
-                    placeholder="Ex: https://link-da-foto.com/foto.jpg"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all"
-                  />
-                </div>
               </div>
               
               <div className="flex gap-3 pt-4">
@@ -327,8 +349,18 @@ export default function Dashboard() {
 
         {/* Projects List */}
         <section>
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-2xl font-bold">Seus Projetos</h2>
+          <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold">{viewAll ? 'Todos os Projetos' : 'Seus Projetos'}</h2>
+              {isAdmin && (
+                <button
+                  onClick={() => setViewAll(!viewAll)}
+                  className="px-4 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+                >
+                  {viewAll ? 'Ver Apenas Meus Projetos' : 'Ver Todos os Projetos'}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input 

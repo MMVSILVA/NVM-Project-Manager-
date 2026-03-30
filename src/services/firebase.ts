@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, createUserWithEmailAndPassword, signInWithEmailAndPassword, setPersistence, inMemoryPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Import the real Firebase configuration
@@ -8,6 +8,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+setPersistence(auth, inMemoryPersistence);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const googleProvider = new GoogleAuthProvider();
 
@@ -16,7 +17,7 @@ export const loginWithEmail = (email: string, pass: string) => signInWithEmailAn
 export const registerWithEmail = (email: string, pass: string) => createUserWithEmailAndPassword(auth, email, pass);
 export const logout = () => signOut(auth);
 
-export const saveUserProfile = async (uid: string, data: { name: string, matricula: string, photoURL?: string, email: string }) => {
+export const saveUserProfile = async (uid: string, data: { name: string, matricula: string, telefone?: string, photoURL?: string, email: string }) => {
   await setDoc(doc(db, 'users', uid), data);
 };
 

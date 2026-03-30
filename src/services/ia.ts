@@ -43,15 +43,72 @@ export const generateTasks = async (projectName: string) => {
   }
 };
 
-export const generateSchedule = async (projectName: string, startDate: string) => {
+export const generateCanvas = async (projectName: string, projectDescription: string) => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Sugira um cronograma básico para o projeto "${projectName}" começando em ${startDate}. Retorne um resumo curto.`,
+      contents: `Gere um Business Model Canvas para o projeto educacional "${projectName}". Descrição base: ${projectDescription}. Retorne os 9 blocos em formato JSON.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            parceiros_chave: { type: Type.STRING },
+            atividades_chave: { type: Type.STRING },
+            recursos_chave: { type: Type.STRING },
+            proposta_valor: { type: Type.STRING },
+            relacionamento_cliente: { type: Type.STRING },
+            canais: { type: Type.STRING },
+            segmentos_clientes: { type: Type.STRING },
+            estrutura_custos: { type: Type.STRING },
+            fluxo_receitas: { type: Type.STRING },
+          },
+          required: ["parceiros_chave", "atividades_chave", "recursos_chave", "proposta_valor", "relacionamento_cliente", "canais", "segmentos_clientes", "estrutura_custos", "fluxo_receitas"],
+        },
+      },
     });
-    return response.text || "Cronograma não gerado.";
+    return JSON.parse(response.text.trim());
   } catch (error) {
-    console.error("Erro ao gerar cronograma:", error);
-    return "Erro ao gerar cronograma com IA.";
+    console.error("Erro ao gerar canvas:", error);
+    return null;
+  }
+};
+
+export const generateReport = async (projectName: string, description: string) => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Gere um relatório detalhado para o projeto "${projectName}". Descrição base: ${description}. O relatório deve incluir introdução, metodologia, resultados esperados e conclusão.`,
+    });
+    return response.text || "Relatório não gerado.";
+  } catch (error) {
+    console.error("Erro ao gerar relatório:", error);
+    return "Erro ao gerar relatório com IA.";
+  }
+};
+
+export const generateBannerContent = async (projectName: string, projectDescription: string) => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Gere o conteúdo textual para um banner de apresentação do projeto "${projectName}". Descrição base: ${projectDescription}. Inclua título, slogan, 3 pontos principais e um call to action.`,
+    });
+    return response.text || "Conteúdo do banner não gerado.";
+  } catch (error) {
+    console.error("Erro ao gerar banner:", error);
+    return "Erro ao gerar conteúdo do banner com IA.";
+  }
+};
+
+export const generatePitchScript = async (projectName: string, projectDescription: string) => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Gere um roteiro de pitch de 1 minuto para o projeto "${projectName}". Descrição base: ${projectDescription}. O roteiro deve ser persuasivo e seguir a estrutura: Gancho, Problema, Solução, Diferencial e Chamada para Ação.`,
+    });
+    return response.text || "Roteiro do pitch não gerado.";
+  } catch (error) {
+    console.error("Erro ao gerar pitch:", error);
+    return "Erro ao gerar roteiro do pitch com IA.";
   }
 };

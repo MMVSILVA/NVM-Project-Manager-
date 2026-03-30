@@ -4,8 +4,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db, auth, getUserProfile } from '../services/firebase';
 import { getTasks, createTask, updateTaskStatus, deleteTask } from '../services/atividades';
 import { updateProject } from '../services/projetos';
-import { generateTasks, generateSchedule } from '../services/ia';
-import { ArrowLeft, Plus, Trash2, Sparkles, Calendar, Loader2, Rocket, LayoutDashboard, CheckCircle2, Clock, Play, FileText, Image as ImageIcon, Box, Presentation, ShieldCheck, Download, MessageCircle, Mail } from 'lucide-react';
+import { generateTasks, generateCanvas, generateReport, generateBannerContent, generatePitchScript } from '../services/ia';
+import { ArrowLeft, Plus, Trash2, Sparkles, Calendar, Loader2, Rocket, LayoutDashboard, CheckCircle2, Clock, Play, FileText, Image as ImageIcon, Box, Presentation, ShieldCheck, Download, MessageCircle, Mail, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 
@@ -21,6 +21,17 @@ interface Project {
   endDate: string;
   approvalProfessor: boolean;
   approvalBiblioteca: boolean;
+  userId: string;
+  // Canvas Fields
+  canvasParceiros?: string;
+  canvasAtividades?: string;
+  canvasRecursos?: string;
+  canvasProposta?: string;
+  canvasRelacionamento?: string;
+  canvasCanais?: string;
+  canvasSegmentos?: string;
+  canvasCustos?: string;
+  canvasReceitas?: string;
   bmCanvas?: string;
   bmCanvasFile?: string;
   relatorio?: string;
@@ -50,11 +61,21 @@ export default function ProjectDetail() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingIA, setLoadingIA] = useState(false);
-  const [schedule, setSchedule] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [professorProfile, setProfessorProfile] = useState<any>(null);
 
   // Form states for sections
-  const [bmCanvas, setBmCanvas] = useState('');
+  const [canvasData, setCanvasData] = useState({
+    parceiros: '',
+    atividades: '',
+    recursos: '',
+    proposta: '',
+    relacionamento: '',
+    canais: '',
+    segmentos: '',
+    custos: '',
+    receitas: ''
+  });
   const [relatorio, setRelatorio] = useState('');
   const [banner, setBanner] = useState('');
   const [prototipo, setPrototipo] = useState('');
@@ -69,11 +90,26 @@ export default function ProjectDetail() {
         const data = { id: docSnap.id, ...docSnap.data() } as Project;
         setProject(data);
         if (data) {
-          setBmCanvas(data.bmCanvas || '');
+          setCanvasData({
+            parceiros: data.canvasParceiros || '',
+            atividades: data.canvasAtividades || '',
+            recursos: data.canvasRecursos || '',
+            proposta: data.canvasProposta || '',
+            relacionamento: data.canvasRelacionamento || '',
+            canais: data.canvasCanais || '',
+            segmentos: data.canvasSegmentos || '',
+            custos: data.canvasCustos || '',
+            receitas: data.canvasReceitas || ''
+          });
           setRelatorio(data.relatorio || '');
           setBanner(data.banner || '');
           setPrototipo(data.prototipo || '');
           setPitch(data.pitch || '');
+
+          if (data.userId) {
+            const profProfile = await getUserProfile(data.userId);
+            setProfessorProfile(profProfile);
+          }
         }
       }
       setLoading(false);
@@ -109,12 +145,22 @@ export default function ProjectDetail() {
     const message = `Olá Valéria, o projeto "${project.name}" da turma ${project.turma} (${project.curso}) já foi aprovado pelo professor e está pronto para o registro na biblioteca.`;
     
     if (type === 'whatsapp') {
-      const phone = '5521999999999'; // Placeholder, user should provide real number
+      const phone = '5524999847737'; // Valéria's number
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
     } else {
       const email = 'vasouza@firjan.com.br';
       window.open(`mailto:${email}?subject=Aprovação de Projeto: ${project.name}&body=${encodeURIComponent(message)}`, '_blank');
     }
+  };
+
+  const handleNotifyProfessor = () => {
+    if (!project || !professorProfile || !professorProfile.telefone) {
+      alert('Telefone do professor não encontrado.');
+      return;
+    }
+    const message = `Olá Professor ${professorProfile.name}, o projeto "${project.name}" teve alterações recentes no Hub. Por favor, verifique as atualizações.`;
+    const phone = professorProfile.telefone.replace(/\D/g, '');
+    window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const handleApproval = async (type: 'Professor' | 'Biblioteca') => {
@@ -129,12 +175,16 @@ export default function ProjectDetail() {
 
     // Email restrictions
     const userEmail = auth.currentUser?.email;
-    if (type === 'Professor' && userEmail !== 'mmvsilva@firjan.com.br') {
-      alert('Apenas o Professor (mmvsilva@firjan.com.br) pode aprovar esta etapa.');
+    const isOwner = auth.currentUser?.uid === project.userId;
+    const isProfessor = userEmail === 'mmvsilva@firjan.com.br' || userEmail === 'marcio.s@docente.firjan.senai.br' || userEmail === 'marcio.v.silva@docente.firjan.senai.br' || isOwner;
+    const isBiblioteca = userEmail === 'vasouza@firjan.com.br';
+
+    if (type === 'Professor' && !isProfessor) {
+      alert('Apenas o Professor Orientador (ou o criador do projeto) pode aprovar esta etapa.');
       return;
     }
-    if (type === 'Biblioteca' && userEmail !== 'vasouza@firjan.com.br') {
-      alert('Apenas a Valéria (vasouza@firjan.com.br) pode aprovar esta etapa.');
+    if (type === 'Biblioteca' && !isBiblioteca) {
+      alert('Apenas a Valéria (Biblioteca) pode aprovar esta etapa.');
       return;
     }
 
@@ -165,6 +215,103 @@ export default function ProjectDetail() {
       console.error("Error suggesting tasks:", error);
     } finally {
       setLoadingIA(false);
+    }
+  };
+
+  const handleGenerateCanvasIA = async () => {
+    if (!project || !id) return;
+    setLoadingIA(true);
+    try {
+      const canvas = await generateCanvas(project.name, project.description);
+      const newCanvasData = {
+        parceiros: canvas.parceiros_chave,
+        atividades: canvas.atividades_chave,
+        recursos: canvas.recursos_chave,
+        proposta: canvas.proposta_valor,
+        relacionamento: canvas.relacionamento_cliente,
+        canais: canvas.canais,
+        segmentos: canvas.segmentos_clientes,
+        custos: canvas.estrutura_custos,
+        receitas: canvas.fluxo_receitas
+      };
+      setCanvasData(newCanvasData);
+      await updateProject(id, {
+        canvasParceiros: newCanvasData.parceiros,
+        canvasAtividades: newCanvasData.atividades,
+        canvasRecursos: newCanvasData.recursos,
+        canvasProposta: newCanvasData.proposta,
+        canvasRelacionamento: newCanvasData.relacionamento,
+        canvasCanais: newCanvasData.canais,
+        canvasSegmentos: newCanvasData.segmentos,
+        canvasCustos: newCanvasData.custos,
+        canvasReceitas: newCanvasData.receitas
+      });
+    } catch (error) {
+      console.error("Error generating canvas:", error);
+    } finally {
+      setLoadingIA(false);
+    }
+  };
+
+  const handleGenerateReportIA = async () => {
+    if (!project || !id) return;
+    setLoadingIA(true);
+    try {
+      const content = await generateReport(project.name, project.description);
+      setRelatorio(content);
+      await updateProject(id, { relatorio: content });
+    } catch (error) {
+      console.error("Error generating report:", error);
+    } finally {
+      setLoadingIA(false);
+    }
+  };
+
+  const handleGenerateBannerIA = async () => {
+    if (!project || !id) return;
+    setLoadingIA(true);
+    try {
+      const content = await generateBannerContent(project.name, project.description);
+      setBanner(content);
+      await updateProject(id, { banner: content });
+    } catch (error) {
+      console.error("Error generating banner:", error);
+    } finally {
+      setLoadingIA(false);
+    }
+  };
+
+  const handleGeneratePitchIA = async () => {
+    if (!project || !id) return;
+    setLoadingIA(true);
+    try {
+      const content = await generatePitchScript(project.name, project.description);
+      setPitch(content);
+      await updateProject(id, { pitch: content });
+    } catch (error) {
+      console.error("Error generating pitch:", error);
+    } finally {
+      setLoadingIA(false);
+    }
+  };
+
+  const handleSaveCanvas = async () => {
+    if (!id) return;
+    try {
+      await updateProject(id, {
+        canvasParceiros: canvasData.parceiros,
+        canvasAtividades: canvasData.atividades,
+        canvasRecursos: canvasData.recursos,
+        canvasProposta: canvasData.proposta,
+        canvasRelacionamento: canvasData.relacionamento,
+        canvasCanais: canvasData.canais,
+        canvasSegmentos: canvasData.segmentos,
+        canvasCustos: canvasData.custos,
+        canvasReceitas: canvasData.receitas
+      });
+      alert('Canvas salvo com sucesso!');
+    } catch (error) {
+      console.error("Error saving canvas:", error);
     }
   };
 
@@ -245,17 +392,17 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
           
           <div className="flex items-center gap-4">
             {userProfile && (
-              <div className="flex items-center gap-3 px-4 py-2 bg-dark-card rounded-full border border-white/10">
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-neon-purple/30">
+              <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
+                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(188,19,254,0.3)]">
                   {userProfile.photoURL ? (
                     <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
-                    <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple font-bold">
+                    <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple text-xl font-bold">
                       {userProfile.name?.charAt(0)}
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col">
+                <div className="flex flex-col items-center">
                   <span className="text-sm font-bold text-white leading-none">{userProfile.name}</span>
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Mat: {userProfile.matricula}</span>
                 </div>
@@ -298,6 +445,15 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
             </div>
 
             <div className="flex gap-3">
+              {professorProfile && professorProfile.telefone && auth.currentUser?.uid !== project.userId && (
+                <button 
+                  onClick={handleNotifyProfessor}
+                  className="flex items-center gap-2 px-6 py-3 bg-green-500/10 text-green-500 border border-green-500/20 rounded-xl hover:bg-green-500/20 transition-all font-bold text-sm"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                  Notificar Professor
+                </button>
+              )}
               <button 
                 onClick={handleSuggestTasks}
                 disabled={loadingIA}
@@ -411,42 +567,147 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
 
           {activeTab === 'canvas' && (
             <div className="bg-dark-card p-8 rounded-2xl border border-white/5">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <FileText className="w-6 h-6 text-neon-purple" />
-                Business Model Canvas
-              </h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Descrição do Modelo</label>
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-neon-purple" />
+                  Business Model Canvas
+                </h2>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={handleGenerateCanvasIA}
+                    disabled={loadingIA}
+                    className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
+                  >
+                    {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Gerar com IA
+                  </button>
+                  <button 
+                    onClick={handleSaveCanvas}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/5 text-white border border-white/10 rounded-xl hover:bg-white/10 transition-all font-bold text-sm"
+                  >
+                    <Save className="w-4 h-4" />
+                    Salvar Canvas
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 min-h-[600px]">
+                {/* Parceiros Chave */}
+                <div className="md:row-span-2 border border-white/10 rounded-xl p-4 bg-black/20">
+                  <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Parceiros-Chave</label>
                   <textarea 
-                    value={bmCanvas}
-                    onChange={(e) => setBmCanvas(e.target.value)}
-                    onBlur={() => handleSaveSection('bmCanvas', bmCanvas)}
-                    placeholder="Descreva o modelo de negócio aqui..."
-                    className="w-full h-[200px] bg-black/30 border border-white/10 rounded-xl p-6 focus:outline-none focus:border-neon-purple transition-all resize-none text-gray-300 leading-relaxed"
+                    value={canvasData.parceiros}
+                    onChange={(e) => setCanvasData({...canvasData, parceiros: e.target.value})}
+                    className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                    placeholder="Quem são nossos parceiros?"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Link do Arquivo (Anexo)</label>
-                  <input 
-                    type="text"
-                    value={project.bmCanvasFile || ''}
-                    onChange={(e) => handleSaveSection('bmCanvasFile', e.target.value)}
-                    placeholder="Cole o link do arquivo (Google Drive, Dropbox, etc)..."
-                    className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all"
+
+                {/* Atividades e Recursos */}
+                <div className="md:col-span-1 space-y-4">
+                  <div className="h-1/2 border border-white/10 rounded-xl p-4 bg-black/20">
+                    <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Atividades-Chave</label>
+                    <textarea 
+                      value={canvasData.atividades}
+                      onChange={(e) => setCanvasData({...canvasData, atividades: e.target.value})}
+                      className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                      placeholder="O que fazemos?"
+                    />
+                  </div>
+                  <div className="h-1/2 border border-white/10 rounded-xl p-4 bg-black/20">
+                    <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Recursos-Chave</label>
+                    <textarea 
+                      value={canvasData.recursos}
+                      onChange={(e) => setCanvasData({...canvasData, recursos: e.target.value})}
+                      className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                      placeholder="O que precisamos?"
+                    />
+                  </div>
+                </div>
+
+                {/* Proposta de Valor */}
+                <div className="md:row-span-2 border border-white/10 rounded-xl p-4 bg-black/20">
+                  <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Proposta de Valor</label>
+                  <textarea 
+                    value={canvasData.proposta}
+                    onChange={(e) => setCanvasData({...canvasData, proposta: e.target.value})}
+                    className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                    placeholder="Qual valor entregamos?"
+                  />
+                </div>
+
+                {/* Relacionamento e Canais */}
+                <div className="md:col-span-1 space-y-4">
+                  <div className="h-1/2 border border-white/10 rounded-xl p-4 bg-black/20">
+                    <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Relacionamento</label>
+                    <textarea 
+                      value={canvasData.relacionamento}
+                      onChange={(e) => setCanvasData({...canvasData, relacionamento: e.target.value})}
+                      className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                      placeholder="Como interagimos?"
+                    />
+                  </div>
+                  <div className="h-1/2 border border-white/10 rounded-xl p-4 bg-black/20">
+                    <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Canais</label>
+                    <textarea 
+                      value={canvasData.canais}
+                      onChange={(e) => setCanvasData({...canvasData, canais: e.target.value})}
+                      className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                      placeholder="Como chegamos ao cliente?"
+                    />
+                  </div>
+                </div>
+
+                {/* Segmentos de Clientes */}
+                <div className="md:row-span-2 border border-white/10 rounded-xl p-4 bg-black/20">
+                  <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Segmentos de Clientes</label>
+                  <textarea 
+                    value={canvasData.segmentos}
+                    onChange={(e) => setCanvasData({...canvasData, segmentos: e.target.value})}
+                    className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                    placeholder="Para quem criamos valor?"
+                  />
+                </div>
+
+                {/* Custos e Receitas */}
+                <div className="md:col-span-2 border border-white/10 rounded-xl p-4 bg-black/20">
+                  <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Estrutura de Custos</label>
+                  <textarea 
+                    value={canvasData.custos}
+                    onChange={(e) => setCanvasData({...canvasData, custos: e.target.value})}
+                    className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                    placeholder="Quais são os custos?"
+                  />
+                </div>
+                <div className="md:col-span-3 border border-white/10 rounded-xl p-4 bg-black/20">
+                  <label className="text-[10px] font-bold text-neon-purple uppercase tracking-widest mb-2 block">Fluxo de Receitas</label>
+                  <textarea 
+                    value={canvasData.receitas}
+                    onChange={(e) => setCanvasData({...canvasData, receitas: e.target.value})}
+                    className="w-full h-[calc(100%-20px)] bg-transparent focus:outline-none text-sm text-gray-300 resize-none"
+                    placeholder="Como ganhamos dinheiro?"
                   />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-4 italic">* As alterações são salvas automaticamente.</p>
             </div>
           )}
 
           {activeTab === 'relatorio' && (
             <div className="bg-dark-card p-8 rounded-2xl border border-white/5">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <FileText className="w-6 h-6 text-neon-green" />
-                Relatório do Projeto
-              </h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-neon-green" />
+                  Relatório do Projeto
+                </h2>
+                <button 
+                  onClick={handleGenerateReportIA}
+                  disabled={loadingIA}
+                  className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
+                >
+                  {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  Gerar com IA
+                </button>
+              </div>
               <div className="space-y-6">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Resumo do Relatório</label>
@@ -474,10 +735,20 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
 
           {activeTab === 'banner' && (
             <div className="bg-dark-card p-8 rounded-2xl border border-white/5">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <ImageIcon className="w-6 h-6 text-neon-purple" />
-                Banner do Projeto
-              </h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <ImageIcon className="w-6 h-6 text-neon-purple" />
+                  Banner do Projeto
+                </h2>
+                <button 
+                  onClick={handleGenerateBannerIA}
+                  disabled={loadingIA}
+                  className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
+                >
+                  {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  Gerar com IA
+                </button>
+              </div>
               <div className="space-y-6">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Link do Arquivo (Anexo)</label>
@@ -538,11 +809,31 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
 
           {activeTab === 'pitch' && (
             <div className="bg-dark-card p-8 rounded-2xl border border-white/5">
-              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                <Presentation className="w-6 h-6 text-neon-purple" />
-                Pitch
-              </h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold flex items-center gap-2">
+                  <Presentation className="w-6 h-6 text-neon-purple" />
+                  Pitch
+                </h2>
+                <button 
+                  onClick={handleGeneratePitchIA}
+                  disabled={loadingIA}
+                  className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
+                >
+                  {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  Gerar Roteiro com IA
+                </button>
+              </div>
               <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Roteiro do Pitch</label>
+                  <textarea 
+                    value={pitch}
+                    onChange={(e) => setPitch(e.target.value)}
+                    onBlur={() => handleSaveSection('pitch', pitch)}
+                    placeholder="Escreva o roteiro do pitch aqui..."
+                    className="w-full h-[200px] bg-black/30 border border-white/10 rounded-xl p-6 focus:outline-none focus:border-neon-purple transition-all resize-none text-gray-300 leading-relaxed"
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Link do Vídeo no YouTube</label>
                   <input 
