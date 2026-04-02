@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { auth, loginWithGoogle, logout, loginWithEmail, registerWithEmail, saveUserProfile } from '../services/firebase';
+import { auth, loginWithGoogle, logout, loginWithEmail, registerWithEmail, saveUserProfile } from '../services/supabase';
 import { LogIn, GraduationCap, Mail, Lock, UserPlus, User, Hash, Camera, Phone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -7,6 +7,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'email' | 'register'>('email');
+  const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -50,24 +51,30 @@ export default function Login() {
     setLoading(true);
     try {
       if (mode === 'register') {
-        const userCredential = await registerWithEmail(email, password);
-        const user = userCredential.user;
-        await saveUserProfile(user.uid, {
-          name,
-          matricula,
-          telefone,
-          photoURL,
-          email
-        });
+        const { data, error } = await registerWithEmail(email, password);
+        if (error) throw error;
+        if (data.user) {
+          await saveUserProfile(data.user.id, {
+            name,
+            matricula,
+            telefone,
+            photoURL,
+            email
+          });
+          setRegistrationSuccess(true);
+          // Don't auto-login if they want to see the success screen
+          await logout();
+        }
       } else {
-        await loginWithEmail(email, password);
+        const { error } = await loginWithEmail(email, password);
+        if (error) throw error;
       }
     } catch (error: any) {
       console.error("Auth Error:", error);
       let message = 'Erro ao autenticar';
-      if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+      if (error.message?.includes('Invalid login credentials')) {
         message = 'E-mail ou senha incorretos';
-      } else if (error.code === 'auth/email-already-in-use') {
+      } else if (error.message?.includes('User already registered')) {
         message = 'Este e-mail já está em uso';
       }
       setError(message);
@@ -75,6 +82,39 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  if (registrationSuccess) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-dark-bg p-4 overflow-hidden relative">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-neon-purple/20 blur-[100px] rounded-full" />
+        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-neon-green/20 blur-[100px] rounded-full" />
+        
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="z-10 text-center w-full max-w-md bg-dark-card p-8 rounded-2xl border border-neon-green shadow-[0_0_20px_rgba(255,51,51,0.2)]"
+        >
+          <div className="w-20 h-20 bg-neon-green/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <UserPlus className="w-10 h-10 text-neon-green" />
+          </div>
+          <h2 className="text-3xl font-black mb-4 text-white">Conta Criada com Sucesso!</h2>
+          <p className="text-gray-400 mb-8">
+            Seu perfil de professor foi registrado. Agora você já pode acessar o sistema para gerenciar seus projetos.
+          </p>
+          <button 
+            onClick={() => {
+              setRegistrationSuccess(false);
+              setMode('email');
+            }}
+            className="neon-button-green w-full flex items-center justify-center gap-3 text-lg py-4"
+          >
+            <LogIn className="w-6 h-6" />
+            Fazer Login
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-dark-bg p-4 overflow-hidden relative">
@@ -87,10 +127,12 @@ export default function Login() {
         animate={{ opacity: 1, y: 0 }}
         className="z-10 text-center w-full max-w-md"
       >
-        <div className="flex items-center justify-center mb-6">
-          <GraduationCap className="w-16 h-16 text-neon-green mr-2" />
-          <h1 className="text-5xl font-black tracking-tighter">
-            PROJECT<span className="text-neon-purple">HUB</span>
+        <div className="flex flex-col items-center justify-center mb-6 gap-4">
+          <div className="bg-white px-4 py-2 rounded flex items-center justify-center">
+            <span className="text-[#005099] font-black text-4xl tracking-tighter leading-none">SENAI</span>
+          </div>
+          <h1 className="text-4xl font-black tracking-tighter text-center">
+            Project Hub Educacional <span className="text-neon-purple">Senai - VR</span>
           </h1>
         </div>
         

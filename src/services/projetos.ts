@@ -1,43 +1,9 @@
-import { collection, addDoc, getDocs, query, where, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { supabase, auth } from './supabase';
 
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: any;
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-export const createProject = async (name: string, description: string, turma: string, curso: string, startDate: string, endDate: string, professorPhoto: string = '') => {
-  const path = 'projects';
+export const createProject = async (name: string, description: string, turma: string, curso: string, startDate: string, endDate: string, professorPhoto: string = '', professorName: string = '') => {
   try {
     if (!auth.currentUser) throw new Error('Usuário não autenticado');
-    const docRef = await addDoc(collection(db, path), {
+    const { data, error } = await supabase.from('projects').insert([{
       name,
       description,
       turma,
@@ -45,69 +11,83 @@ export const createProject = async (name: string, description: string, turma: st
       startDate,
       endDate,
       professorPhoto,
-      userId: auth.currentUser.uid,
-      createdAt: serverTimestamp(),
+      professorName,
+      userId: auth.currentUser.id,
+      createdAt: new Date().toISOString(),
       status: 'active',
       approvalProfessor: false,
       approvalBiblioteca: false,
-      bmCanvas: '',
       relatorio: '',
       banner: '',
       prototipo: '',
       pitch: ''
-    });
-    return docRef.id;
+    }]).select();
+    if (error) throw error;
+    return data[0].id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.error("Error creating project:", error);
+    throw error;
   }
 };
 
 export const updateProject = async (projectId: string, data: any) => {
-  const path = `projects/${projectId}`;
   try {
-    await updateDoc(doc(db, 'projects', projectId), data);
+    const { error } = await supabase.from('projects').update(data).eq('id', projectId);
+    if (error) throw error;
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    console.error("Error updating project:", error);
+    throw error;
   }
 };
 
 export const getAllProjects = async () => {
-  const path = 'projects';
   try {
-    const q = query(collection(db, path));
-    const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const { data, error } = await supabase.from('projects').select('*');
+    if (error) throw error;
+    return data;
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
+    console.error("Error getting all projects:", error);
+    throw error;
   }
 };
 
 export const getProjects = (callback: (projects: any[]) => void) => {
-  const path = 'projects';
   if (!auth.currentUser) return () => {};
   
   const adminEmails = ['mmvsilva@firjan.com.br', 'vasouza@firjan.com.br', 'marcio.s@docente.firjan.senai.br', 'marcio.v.silva@docente.firjan.senai.br'];
-  let q;
+  const isAdmin = auth.currentUser.email && adminEmails.includes(auth.currentUser.email);
   
-  if (auth.currentUser.email && adminEmails.includes(auth.currentUser.email)) {
-    q = query(collection(db, path));
-  } else {
-    q = query(collection(db, path), where('userId', '==', auth.currentUser.uid));
-  }
-  
-  return onSnapshot(q, (snapshot) => {
-    const projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    callback(projects);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.LIST, path);
-  });
+  const fetchProjects = async () => {
+    let query = supabase.from('projects').select('*');
+    if (!isAdmin) {
+      query = query.eq('userId', auth.currentUser!.id);
+    }
+    const { data, error } = await query;
+    if (!error && data) {
+      callback(data);
+    }
+  };
+
+  fetchProjects();
+
+  const subscription = supabase
+    .channel('projects_changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, () => {
+      fetchProjects();
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(subscription);
+  };
 };
 
 export const deleteProject = async (projectId: string) => {
-  const path = `projects/${projectId}`;
   try {
-    await deleteDoc(doc(db, 'projects', projectId));
+    const { error } = await supabase.from('projects').delete().eq('id', projectId);
+    if (error) throw error;
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.error("Error deleting project:", error);
+    throw error;
   }
 };

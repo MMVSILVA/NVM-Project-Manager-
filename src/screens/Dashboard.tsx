@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { auth, logout, getUserProfile } from '../services/firebase';
+import React, { useState, useEffect, useMemo } from 'react';
+import { auth, logout, getUserProfile } from '../services/supabase';
 import { getProjects, createProject, deleteProject, getAllProjects } from '../services/projetos';
 import { createTask } from '../services/atividades';
 import { generateProjectDescription, generateTasks } from '../services/ia';
 import { Plus, Trash2, LogOut, Sparkles, FolderKanban, ArrowRight, Loader2, Search, FileText, Calendar as CalendarIcon, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 interface Project {
   id: string;
@@ -30,10 +32,7 @@ interface Project {
   canvasSegmentos?: string;
   canvasCustos?: string;
   canvasReceitas?: string;
-  bmCanvas?: string;
-  bmCanvasFile?: string;
   relatorio?: string;
-  relatorioFile?: string;
   banner?: string;
   prototipo?: string;
   pitch?: string;
@@ -47,6 +46,7 @@ export default function Dashboard() {
   const [curso, setCurso] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [professorName, setProfessorName] = useState('');
   const [professorPhoto, setProfessorPhoto] = useState('');
   const [loadingIA, setLoadingIA] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,7 +62,7 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubscribe = getProjects((projs) => {
       if (isAdmin && !viewAll) {
-        setProjects(projs.filter(p => p.userId === auth.currentUser?.uid));
+        setProjects(projs.filter(p => p.userId === auth.currentUser?.id));
       } else {
         setProjects(projs);
       }
@@ -70,7 +70,7 @@ export default function Dashboard() {
     
     const fetchProfile = async () => {
       if (auth.currentUser) {
-        const profile = await getUserProfile(auth.currentUser.uid);
+        const profile = await getUserProfile(auth.currentUser.id);
         setUserProfile(profile);
       }
     };
@@ -87,12 +87,13 @@ export default function Dashboard() {
     }
 
     try {
-      await createProject(newProjectName, "Projeto educacional em desenvolvimento.", turma, curso, startDate, endDate, professorPhoto);
+      await createProject(newProjectName, "Projeto educacional em desenvolvimento.", turma, curso, startDate, endDate, professorPhoto, professorName);
       setNewProjectName('');
       setTurma('');
       setCurso('');
       setStartDate('');
       setEndDate('');
+      setProfessorName('');
       setProfessorPhoto('');
     } catch (error) {
       console.error("Error creating project:", error);
@@ -108,7 +109,7 @@ export default function Dashboard() {
 
     try {
       const description = await generateProjectDescription(newProjectName);
-      const projectId = await createProject(newProjectName, description, turma, curso, startDate, endDate, professorPhoto);
+      const projectId = await createProject(newProjectName, description, turma, curso, startDate, endDate, professorPhoto, professorName);
       
       if (projectId) {
         const tasks = await generateTasks(newProjectName);
@@ -131,116 +132,263 @@ export default function Dashboard() {
       return;
     }
 
-    // 1. Prepare Raw Data for "Projetos" sheet
-    const rawData = allProjects.map(p => ({
-      'ID': p.id,
-      'Nome do Projeto': p.name,
-      'Curso': p.curso,
-      'Turma': p.turma,
-      'Descrição': p.description,
-      'Data Início': p.startDate,
-      'Data Término': p.endDate,
-      'Aprovação Professor': p.approvalProfessor ? 'SIM' : 'NÃO',
-      'Aprovação Biblioteca': p.approvalBiblioteca ? 'SIM' : 'NÃO',
-      'Data de Criação': p.createdAt ? new Date(p.createdAt.toDate()).toLocaleString() : 'N/A'
-    }));
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Firjan SENAI';
+    wb.created = new Date();
 
-    // 2. Prepare Dashboard Data for "Dashboard" sheet
+    // --- TAB 1: DASHBOARD ---
+    const wsDash = wb.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+
+    // Title
+    wsDash.mergeCells('A1:E2');
+    const titleCell = wsDash.getCell('A1');
+    titleCell.value = 'DASHBOARD GERAL DE PROJETOS - FIRJAN SENAI';
+    titleCell.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } }; // Firjan Blue
+    titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    // Metrics
     const totalProjects = allProjects.length;
     const approvedProfessor = allProjects.filter(p => p.approvalProfessor).length;
     const approvedBiblioteca = allProjects.filter(p => p.approvalBiblioteca).length;
 
+    wsDash.getCell('A4').value = 'MÉTRICAS GERAIS';
+    wsDash.getCell('A4').font = { size: 12, bold: true };
+
+    const createMetricCard = (row: number, label: string, value: string | number) => {
+      wsDash.getCell(`A${row}`).value = label;
+      wsDash.getCell(`B${row}`).value = value;
+      wsDash.getCell(`A${row}`).font = { bold: true };
+      wsDash.getCell(`A${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+      wsDash.getCell(`B${row}`).alignment = { horizontal: 'center' };
+      wsDash.getCell(`A${row}`).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      wsDash.getCell(`B${row}`).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+    };
+
+    createMetricCard(5, 'Total de Projetos', totalProjects);
+    createMetricCard(6, 'Aprovados pelo Professor', `${approvedProfessor} (${((approvedProfessor/totalProjects)*100).toFixed(1)}%)`);
+    createMetricCard(7, 'Aprovados pela Biblioteca', `${approvedBiblioteca} (${((approvedBiblioteca/totalProjects)*100).toFixed(1)}%)`);
+
+    wsDash.getColumn('A').width = 30;
+    wsDash.getColumn('B').width = 20;
+    wsDash.getColumn('C').width = 5;
+    wsDash.getColumn('D').width = 30;
+    wsDash.getColumn('E').width = 20;
+
+    // Course Data
     const courseCounts: Record<string, number> = {};
     const turmaCounts: Record<string, number> = {};
-
     allProjects.forEach(p => {
       courseCounts[p.curso] = (courseCounts[p.curso] || 0) + 1;
       turmaCounts[p.turma] = (turmaCounts[p.turma] || 0) + 1;
     });
 
-    const dashboardData = [
-      ['DASHBOARD GERAL DE PROJETOS'],
-      [''],
-      ['MÉTRICAS GERAIS'],
-      ['Total de Projetos', totalProjects],
-      ['Aprovados pelo Professor', approvedProfessor, `${((approvedProfessor/totalProjects)*100).toFixed(1)}%`],
-      ['Aprovados pela Biblioteca', approvedBiblioteca, `${((approvedBiblioteca/totalProjects)*100).toFixed(1)}%`],
-      [''],
-      ['PROJETOS POR CURSO'],
-      ['Curso', 'Quantidade']
+    wsDash.getCell('D4').value = 'PROJETOS POR CURSO';
+    wsDash.getCell('D4').font = { size: 12, bold: true };
+    wsDash.getCell('D5').value = 'Curso';
+    wsDash.getCell('E5').value = 'Quantidade';
+    ['D5', 'E5'].forEach(cell => {
+      wsDash.getCell(cell).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      wsDash.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } };
+      wsDash.getCell(cell).alignment = { horizontal: 'center' };
+    });
+
+    let currentRow = 6;
+    Object.entries(courseCounts).forEach(([course, count]) => {
+      wsDash.getCell(`D${currentRow}`).value = course;
+      wsDash.getCell(`E${currentRow}`).value = count;
+      wsDash.getCell(`E${currentRow}`).alignment = { horizontal: 'center' };
+      wsDash.getCell(`D${currentRow}`).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      wsDash.getCell(`E${currentRow}`).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      currentRow++;
+    });
+
+    currentRow += 2;
+    wsDash.getCell(`D${currentRow}`).value = 'PROJETOS POR TURMA';
+    wsDash.getCell(`D${currentRow}`).font = { size: 12, bold: true };
+    currentRow++;
+    wsDash.getCell(`D${currentRow}`).value = 'Turma';
+    wsDash.getCell(`E${currentRow}`).value = 'Quantidade';
+    [`D${currentRow}`, `E${currentRow}`].forEach(cell => {
+      wsDash.getCell(cell).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      wsDash.getCell(cell).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } };
+      wsDash.getCell(cell).alignment = { horizontal: 'center' };
+    });
+    currentRow++;
+    Object.entries(turmaCounts).forEach(([turma, count]) => {
+      wsDash.getCell(`D${currentRow}`).value = turma;
+      wsDash.getCell(`E${currentRow}`).value = count;
+      wsDash.getCell(`E${currentRow}`).alignment = { horizontal: 'center' };
+      wsDash.getCell(`D${currentRow}`).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      wsDash.getCell(`E${currentRow}`).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      currentRow++;
+    });
+
+    // --- TAB 2: LISTA DE PROJETOS ---
+    const wsData = wb.addWorksheet('Lista de Projetos');
+    
+    wsData.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Nome do Projeto', key: 'name', width: 40 },
+      { header: 'Curso', key: 'curso', width: 30 },
+      { header: 'Turma', key: 'turma', width: 15 },
+      { header: 'Descrição', key: 'description', width: 60 },
+      { header: 'Data Início', key: 'startDate', width: 15 },
+      { header: 'Data Término', key: 'endDate', width: 15 },
+      { header: 'Aprovação Prof.', key: 'appProf', width: 20 },
+      { header: 'Aprovação Bib.', key: 'appBib', width: 20 },
+      { header: 'Data de Criação', key: 'createdAt', width: 20 },
     ];
 
-    Object.entries(courseCounts).forEach(([course, count]) => {
-      dashboardData.push([course, count]);
+    // Style Headers
+    wsData.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    wsData.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } };
+    wsData.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    wsData.autoFilter = 'A1:J1';
+
+    // Add Data
+    allProjects.forEach(p => {
+      wsData.addRow({
+        id: p.id.substring(0, 8) + '...',
+        name: p.name,
+        curso: p.curso,
+        turma: p.turma,
+        description: p.description,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        appProf: p.approvalProfessor ? 'SIM' : 'NÃO',
+        appBib: p.approvalBiblioteca ? 'SIM' : 'NÃO',
+        createdAt: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A'
+      });
     });
 
-    dashboardData.push(['']);
-    dashboardData.push(['PROJETOS POR TURMA']);
-    dashboardData.push(['Turma', 'Quantidade']);
-
-    Object.entries(turmaCounts).forEach(([turma, count]) => {
-      dashboardData.push([turma, count]);
+    // Add alternating row colors and borders
+    wsData.eachRow((row, rowNumber) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: {style:'thin', color: {argb:'FFDDDDDD'}},
+          left: {style:'thin', color: {argb:'FFDDDDDD'}},
+          bottom: {style:'thin', color: {argb:'FFDDDDDD'}},
+          right: {style:'thin', color: {argb:'FFDDDDDD'}}
+        };
+        if (rowNumber > 1) {
+          cell.alignment = { vertical: 'middle', wrapText: true };
+        }
+      });
+      if (rowNumber > 1 && rowNumber % 2 === 0) {
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+      }
     });
 
-    // 3. Create Workbook and Sheets
-    const wb = XLSX.utils.book_new();
-    
-    // Raw Data Sheet
-    const wsRaw = XLSX.utils.json_to_sheet(rawData);
-    XLSX.utils.book_append_sheet(wb, wsRaw, "Lista de Projetos");
-
-    // Dashboard Sheet
-    const wsDash = XLSX.utils.aoa_to_sheet(dashboardData);
-    XLSX.utils.book_append_sheet(wb, wsDash, "Dashboard");
-
-    // 4. Download File
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Relatorio_Geral_Projetos_${new Date().toISOString().split('T')[0]}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Generate and save file
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `Relatorio_Projetos_Firjan_SENAI_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
-  const filteredProjects = projects.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'pending'>('all');
+
+  const filteredProjects = projects.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || 
+                          (statusFilter === 'approved' && p.approvalProfessor) || 
+                          (statusFilter === 'pending' && !p.approvalProfessor);
+    return matchesSearch && matchesStatus;
+  });
+
+  const projectsByCourse = useMemo(() => {
+    const courseData = projects.reduce((acc, p) => {
+      if (!acc[p.curso]) {
+        acc[p.curso] = { name: p.curso, value: 0, professors: new Set<string>() };
+      }
+      acc[p.curso].value += 1;
+      acc[p.curso].professors.add(p.professorName || 'Desconhecido');
+      return acc;
+    }, {} as Record<string, { name: string, value: number, professors: Set<string> }>);
+    
+    return Object.values(courseData).map(d => ({
+      ...d,
+      professorsList: Array.from(d.professors).join(', ')
+    }));
+  }, [projects]);
+
+  const CustomBarTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-dark-card border border-white/10 p-4 rounded-xl shadow-xl">
+          <p className="font-bold text-white mb-2">{label}</p>
+          <p className="text-sm text-gray-400 mb-1">
+            <span className="font-bold text-neon-green">Quantidade:</span> {data.value}
+          </p>
+          <p className="text-sm text-gray-400">
+            <span className="font-bold text-neon-purple">Professor(es):</span> {data.professorsList}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-dark-card border border-white/10 p-4 rounded-xl shadow-xl">
+          <p className="font-bold text-white mb-1">{data.name}</p>
+          <p className="text-sm text-gray-400">
+            <span className="font-bold" style={{ color: payload[0].fill }}>Quantidade:</span> {data.value}
+          </p>
+          <p className="text-xs text-gray-500 mt-2 italic">Clique para filtrar</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const getDisplayName = (profile: any, email: string | undefined) => {
+    if (profile?.name) return profile.name;
+    if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') return 'Márcio Vinícius';
+    if (email === 'vasouza@firjan.com.br') return 'V. Souza';
+    return email?.split('@')[0] || 'Usuário';
+  };
+
+  const getDisplayMatricula = (profile: any, email: string | undefined) => {
+    if (profile?.matricula) return profile.matricula;
+    if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') return '00001';
+    if (email === 'vasouza@firjan.com.br') return '00002';
+    return 'N/A';
+  };
 
   return (
     <div className="min-h-screen bg-dark-bg text-white p-6">
       {/* Header */}
       <header className="max-w-7xl mx-auto flex justify-between items-center mb-12">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-neon-purple rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(188,19,254,0.5)]">
-            <FolderKanban className="w-6 h-6 text-white" />
+          <div className="bg-white px-3 py-1 rounded flex items-center justify-center">
+            <span className="text-[#005099] font-black text-2xl tracking-tighter leading-none">SENAI</span>
           </div>
           <h1 className="text-2xl font-black tracking-tighter uppercase">
-            HUB<span className="text-neon-green">DASHBOARD</span>
+            Project Hub Educacional <span className="text-neon-green">Senai - VR</span>
           </h1>
         </div>
 
         <div className="flex items-center gap-4">
-          {userProfile && (
-            <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
-              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(188,19,254,0.3)]">
-                {userProfile.photoURL ? (
-                  <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                ) : (
-                  <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple text-xl font-bold">
-                    {userProfile.name?.charAt(0)}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold text-white leading-none">{userProfile.name}</span>
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Mat: {userProfile.matricula}</span>
-              </div>
+          <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
+            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(0,80,153,0.3)]">
+              {userProfile?.photoURL ? (
+                <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple text-xl font-bold uppercase">
+                  {getDisplayName(userProfile, auth.currentUser?.email).charAt(0)}
+                </div>
+              )}
             </div>
-          )}
+            <div className="flex flex-col items-center">
+              <span className="text-sm font-bold text-white leading-none">{getDisplayName(userProfile, auth.currentUser?.email)}</span>
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Mat: {getDisplayMatricula(userProfile, auth.currentUser?.email)}</span>
+            </div>
+          </div>
           {(auth.currentUser?.email === 'mmvsilva@firjan.com.br' || auth.currentUser?.email === 'vasouza@firjan.com.br' || auth.currentUser?.email === 'marcio.s@docente.firjan.senai.br') && (
             <button 
               onClick={generateGlobalReport}
@@ -298,7 +446,17 @@ export default function Dashboard() {
                     className="w-full bg-black/50 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Professor Responsável</label>
+                  <input 
+                    type="text" 
+                    value={professorName}
+                    onChange={(e) => setProfessorName(e.target.value)}
+                    placeholder="Ex: Márcio Vinícius"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:col-span-2">
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-gray-500">Início</label>
                     <input 
@@ -347,11 +505,85 @@ export default function Dashboard() {
           </div>
         </section>
 
+        {/* Charts Section */}
+        {projects.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-2xl font-bold mb-6">Visão Geral</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-dark-card p-6 rounded-2xl border border-white/5">
+                <h3 className="text-lg font-bold mb-4 text-gray-400">Projetos por Curso</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={projectsByCourse}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                      <XAxis dataKey="name" stroke="#888" />
+                      <YAxis stroke="#888" />
+                      <Tooltip content={<CustomBarTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
+                      <Bar dataKey="value" fill="#00FF9D" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="bg-dark-card p-6 rounded-2xl border border-white/5">
+                <h3 className="text-lg font-bold mb-4 text-gray-400">Status de Aprovação (Professor)</h3>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Aprovados', value: projects.filter(p => p.approvalProfessor).length, id: 'approved' },
+                          { name: 'Pendentes', value: projects.filter(p => !p.approvalProfessor).length, id: 'pending' }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                        onClick={(data) => {
+                          setStatusFilter(statusFilter === data.id ? 'all' : data.id);
+                          // Scroll to projects list
+                          document.getElementById('projects-list')?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <Cell fill="#00FF9D" />
+                        <Cell fill="#B026FF" />
+                      </Pie>
+                      <Tooltip content={<CustomPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex justify-center gap-4 mt-4">
+                    <button 
+                      onClick={() => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved')}
+                      className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all ${statusFilter === 'approved' ? 'bg-neon-green/20' : 'hover:bg-white/5'}`}
+                    >
+                      <div className="w-3 h-3 rounded-full bg-neon-green"></div>
+                      <span className="text-sm text-gray-400">Aprovados</span>
+                    </button>
+                    <button 
+                      onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}
+                      className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all ${statusFilter === 'pending' ? 'bg-neon-purple/20' : 'hover:bg-white/5'}`}
+                    >
+                      <div className="w-3 h-3 rounded-full bg-neon-purple"></div>
+                      <span className="text-sm text-gray-400">Pendentes</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Projects List */}
-        <section>
+        <section id="projects-list">
           <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
             <div className="flex items-center gap-4">
-              <h2 className="text-2xl font-bold">{viewAll ? 'Todos os Projetos' : 'Seus Projetos'}</h2>
+              <h2 className="text-2xl font-bold">
+                {viewAll ? 'Todos os Projetos' : 'Seus Projetos'}
+                {statusFilter === 'approved' && <span className="ml-2 text-sm font-normal text-neon-green bg-neon-green/10 px-2 py-1 rounded-full">Filtrado: Aprovados</span>}
+                {statusFilter === 'pending' && <span className="ml-2 text-sm font-normal text-neon-purple bg-neon-purple/10 px-2 py-1 rounded-full">Filtrado: Pendentes</span>}
+              </h2>
               {isAdmin && (
                 <button
                   onClick={() => setViewAll(!viewAll)}
@@ -410,7 +642,7 @@ export default function Dashboard() {
                   </p>
 
                   <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-gray-600">
-                    <span>{new Date(project.createdAt?.toDate()).toLocaleDateString()}</span>
+                    <span>{project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'N/A'}</span>
                     <div className="flex items-center gap-1 group-hover:text-neon-green transition-colors">
                       VER DETALHES <ArrowRight className="w-3 h-3" />
                     </div>
@@ -432,7 +664,7 @@ export default function Dashboard() {
             <div className="w-2 h-2 rounded-full bg-white" />
             By Márcio Vinícius
           </div>
-          <div>© 2026 HUB DASHBOARD - TODOS OS DIREITOS RESERVADOS</div>
+          <div>© 2026 Project Hub Educacional - SENAI VR TODOS OS DIREITOS RESERVADOS</div>
         </footer>
       </main>
     </div>

@@ -78,12 +78,12 @@ export const generateReport = async (projectName: string, description: string) =
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Gere um relatório detalhado para o projeto "${projectName}". Descrição base: ${description}. O relatório deve incluir introdução, metodologia, resultados esperados e conclusão.`,
+      contents: `Gere um Resumo Expandido para o projeto "${projectName}". Descrição base: ${description}. O resumo expandido deve ter entre 600 e 700 palavras, e incluir Introdução, Metodologia, Resultados e Conclusão, seguindo o padrão acadêmico.`,
     });
-    return response.text || "Relatório não gerado.";
+    return response.text || "Resumo Expandido não gerado.";
   } catch (error) {
-    console.error("Erro ao gerar relatório:", error);
-    return "Erro ao gerar relatório com IA.";
+    console.error("Erro ao gerar resumo expandido:", error);
+    return "Erro ao gerar resumo expandido com IA.";
   }
 };
 
@@ -100,11 +100,12 @@ export const generateBannerContent = async (projectName: string, projectDescript
   }
 };
 
-export const generatePitchScript = async (projectName: string, projectDescription: string) => {
+export const generatePitchScript = async (projectName: string, projectDescription: string, relatorio?: string) => {
   try {
+    const context = relatorio ? `Baseie-se no seguinte Resumo Expandido do projeto:\n${relatorio}` : `Descrição base: ${projectDescription}`;
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Gere um roteiro de pitch de 1 minuto para o projeto "${projectName}". Descrição base: ${projectDescription}. O roteiro deve ser persuasivo e seguir a estrutura: Gancho, Problema, Solução, Diferencial e Chamada para Ação.`,
+      contents: `Gere um roteiro de pitch de 1 a 3 minutos para o projeto "${projectName}". ${context}. O roteiro deve ser persuasivo e seguir a estrutura: Gancho, Problema, Solução, Diferencial e Chamada para Ação.`,
     });
     return response.text || "Roteiro do pitch não gerado.";
   } catch (error) {

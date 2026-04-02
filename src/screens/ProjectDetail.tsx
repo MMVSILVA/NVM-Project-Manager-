@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, auth, getUserProfile } from '../services/firebase';
-import { getTasks, createTask, updateTaskStatus, deleteTask } from '../services/atividades';
+import { auth, getUserProfile, supabase } from '../services/supabase';
+import { getTasks, createTask, updateTaskStatus, deleteTask, updateTaskTitle } from '../services/atividades';
 import { updateProject } from '../services/projetos';
 import { generateTasks, generateCanvas, generateReport, generateBannerContent, generatePitchScript } from '../services/ia';
-import { ArrowLeft, Plus, Trash2, Sparkles, Calendar, Loader2, Rocket, LayoutDashboard, CheckCircle2, Clock, Play, FileText, Image as ImageIcon, Box, Presentation, ShieldCheck, Download, MessageCircle, Mail, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Sparkles, Calendar, Loader2, Rocket, LayoutDashboard, CheckCircle2, Clock, Play, FileText, Image as ImageIcon, Box, Presentation, ShieldCheck, Download, MessageCircle, Mail, Save, Edit2, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+import { ProjectBanner } from '../components/ProjectBanner';
 
 type TabType = 'kanban' | 'canvas' | 'relatorio' | 'banner' | 'prototipo' | 'pitch' | 'aprovacao';
 
@@ -32,10 +34,7 @@ interface Project {
   canvasSegmentos?: string;
   canvasCustos?: string;
   canvasReceitas?: string;
-  bmCanvas?: string;
-  bmCanvasFile?: string;
   relatorio?: string;
-  relatorioFile?: string;
   banner?: string;
   prototipo?: string;
   pitch?: string;
@@ -63,6 +62,10 @@ export default function ProjectDetail() {
   const [loadingIA, setLoadingIA] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [professorProfile, setProfessorProfile] = useState<any>(null);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState('');
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editingDescription, setEditingDescription] = useState('');
 
   // Form states for sections
   const [canvasData, setCanvasData] = useState({
@@ -84,40 +87,45 @@ export default function ProjectDetail() {
   useEffect(() => {
     const fetchProject = async () => {
       if (!id) return;
-      const docRef = doc(db, 'projects', id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = { id: docSnap.id, ...docSnap.data() } as Project;
-        setProject(data);
-        if (data) {
-          setCanvasData({
-            parceiros: data.canvasParceiros || '',
-            atividades: data.canvasAtividades || '',
-            recursos: data.canvasRecursos || '',
-            proposta: data.canvasProposta || '',
-            relacionamento: data.canvasRelacionamento || '',
-            canais: data.canvasCanais || '',
-            segmentos: data.canvasSegmentos || '',
-            custos: data.canvasCustos || '',
-            receitas: data.canvasReceitas || ''
-          });
-          setRelatorio(data.relatorio || '');
-          setBanner(data.banner || '');
-          setPrototipo(data.prototipo || '');
-          setPitch(data.pitch || '');
+      try {
+        const { data: docSnap, error } = await supabase.from('projects').select('*').eq('id', id).single();
+        if (error) throw error;
+        if (docSnap) {
+          const data = { id: docSnap.id, ...docSnap } as Project;
+          setProject(data);
+          if (data) {
+            setEditingDescription(data.description || '');
+            setCanvasData({
+              parceiros: data.canvasParceiros || '',
+              atividades: data.canvasAtividades || '',
+              recursos: data.canvasRecursos || '',
+              proposta: data.canvasProposta || '',
+              relacionamento: data.canvasRelacionamento || '',
+              canais: data.canvasCanais || '',
+              segmentos: data.canvasSegmentos || '',
+              custos: data.canvasCustos || '',
+              receitas: data.canvasReceitas || ''
+            });
+            setRelatorio(data.relatorio || '');
+            setBanner(data.banner || '');
+            setPrototipo(data.prototipo || '');
+            setPitch(data.pitch || '');
 
-          if (data.userId) {
-            const profProfile = await getUserProfile(data.userId);
-            setProfessorProfile(profProfile);
+            if (data.userId) {
+              const profProfile = await getUserProfile(data.userId);
+              setProfessorProfile(profProfile);
+            }
           }
         }
+      } catch (error) {
+        console.error("Error fetching project:", error);
       }
       setLoading(false);
     };
 
     const fetchProfile = async () => {
       if (auth.currentUser) {
-        const profile = await getUserProfile(auth.currentUser.uid);
+        const profile = await getUserProfile(auth.currentUser.id);
         setUserProfile(profile);
       }
     };
@@ -142,7 +150,15 @@ export default function ProjectDetail() {
 
   const handleNotifyValeria = (type: 'whatsapp' | 'email') => {
     if (!project) return;
-    const message = `Olá Valéria, o projeto "${project.name}" da turma ${project.turma} (${project.curso}) já foi aprovado pelo professor e está pronto para o registro na biblioteca.`;
+    
+    const message = `*NOVO PROJETO APROVADO!* 🎉\n\n` +
+                    `Olá Valéria, o projeto abaixo foi aprovado e está pronto para registro na biblioteca:\n\n` +
+                    `📚 *Projeto:* ${project.name}\n` +
+                    `👨‍🏫 *Professor:* ${project.professorName || 'Não informado'}\n` +
+                    `🎓 *Curso:* ${project.curso || 'Não informado'}\n` +
+                    `👥 *Turma:* ${project.turma || 'Não informado'}\n\n` +
+                    `📝 *Descrição:*\n${project.description || 'Sem descrição'}\n\n` +
+                    `Por favor, providenciar os próximos passos.`;
     
     if (type === 'whatsapp') {
       const phone = '5524999847737'; // Valéria's number
@@ -175,7 +191,7 @@ export default function ProjectDetail() {
 
     // Email restrictions
     const userEmail = auth.currentUser?.email;
-    const isOwner = auth.currentUser?.uid === project.userId;
+    const isOwner = auth.currentUser?.id === project.userId;
     const isProfessor = userEmail === 'mmvsilva@firjan.com.br' || userEmail === 'marcio.s@docente.firjan.senai.br' || userEmail === 'marcio.v.silva@docente.firjan.senai.br' || isOwner;
     const isBiblioteca = userEmail === 'vasouza@firjan.com.br';
 
@@ -189,8 +205,14 @@ export default function ProjectDetail() {
     }
 
     try {
-      await updateProject(id, { [field]: !project[field] });
-      setProject({ ...project, [field]: !project[field] });
+      const isApproving = !project[field];
+      await updateProject(id, { [field]: isApproving });
+      setProject({ ...project, [field]: isApproving });
+
+      // Automate WhatsApp message to Valéria when Professor approves
+      if (type === 'Professor' && isApproving) {
+        handleNotifyValeria('whatsapp');
+      }
     } catch (error) {
       console.error(`Error updating ${type} approval:`, error);
     }
@@ -255,9 +277,18 @@ export default function ProjectDetail() {
 
   const handleGenerateReportIA = async () => {
     if (!project || !id) return;
+    
+    let baseDescription = project.description;
+    if (!baseDescription || baseDescription === "Projeto educacional em desenvolvimento.") {
+      const userInput = window.prompt("Por favor, forneça mais detalhes sobre o projeto para gerar um resumo mais preciso:");
+      if (userInput) {
+        baseDescription += "\nDetalhes adicionais: " + userInput;
+      }
+    }
+
     setLoadingIA(true);
     try {
-      const content = await generateReport(project.name, project.description);
+      const content = await generateReport(project.name, baseDescription);
       setRelatorio(content);
       await updateProject(id, { relatorio: content });
     } catch (error) {
@@ -285,7 +316,7 @@ export default function ProjectDetail() {
     if (!project || !id) return;
     setLoadingIA(true);
     try {
-      const content = await generatePitchScript(project.name, project.description);
+      const content = await generatePitchScript(project.name, project.description, relatorio);
       setPitch(content);
       await updateProject(id, { pitch: content });
     } catch (error) {
@@ -315,47 +346,57 @@ export default function ProjectDetail() {
     }
   };
 
-  const generateProjectReport = () => {
+  const generateProjectReport = async () => {
     if (!project) return;
-    const reportContent = `
-RELATÓRIO DO PROJETO: ${project.name}
---------------------------------------------------
-CURSO: ${project.curso}
-TURMA: ${project.turma}
-PERÍODO: ${project.startDate} até ${project.endDate}
-DESCRIÇÃO: ${project.description}
+    
+    // We will use the hidden ProjectBanner component to generate the PDF
+    const bannerElement = document.getElementById('project-banner-export');
+    if (!bannerElement) {
+      alert('Erro ao gerar o banner. Elemento não encontrado.');
+      return;
+    }
 
---- ENTREGAS ---
-BM CANVAS:
-${project.bmCanvas || 'Não preenchido'}
+    try {
+      // Temporarily make it visible for html2canvas
+      bannerElement.style.position = 'relative';
+      bannerElement.style.left = '0';
+      bannerElement.style.top = '0';
 
-RELATÓRIO:
-${project.relatorio || 'Não preenchido'}
+      const canvas = await html2canvas(bannerElement, {
+        scale: 2, // Higher resolution
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
 
-BANNER:
-${project.banner || 'Não preenchido'}
+      // Hide it again
+      bannerElement.style.position = 'absolute';
+      bannerElement.style.left = '-9999px';
+      bannerElement.style.top = '-9999px';
 
-PROTÓTIPO:
-${project.prototipo || 'Não preenchido'}
+      const imgData = canvas.toDataURL('image/png');
+      
+      // A4 size in mm: 210 x 297
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
 
-PITCH:
-${project.pitch || 'Não preenchido'}
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
---- APROVAÇÕES ---
-PROFESSOR: ${project.approvalProfessor ? 'APROVADO' : 'PENDENTE'}
-VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
---------------------------------------------------
-    `;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Banner_${project.name.replace(/\s+/g, '_')}.pdf`);
 
-    const blob = new Blob([reportContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio_${project.name.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Ocorreu um erro ao gerar o banner em PDF.');
+      // Ensure it's hidden even if error occurs
+      bannerElement.style.position = 'absolute';
+      bannerElement.style.left = '-9999px';
+      bannerElement.style.top = '-9999px';
+    }
   };
 
   if (loading) return (
@@ -377,8 +418,23 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
     { id: 'done', title: 'Concluído', icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-neon-green' },
   ];
 
+  const getDisplayName = (profile: any, email: string | undefined) => {
+    if (profile?.name) return profile.name;
+    if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') return 'Márcio Vinícius';
+    if (email === 'vasouza@firjan.com.br') return 'V. Souza';
+    return email?.split('@')[0] || 'Usuário';
+  };
+
+  const getDisplayMatricula = (profile: any, email: string | undefined) => {
+    if (profile?.matricula) return profile.matricula;
+    if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') return '00001';
+    if (email === 'vasouza@firjan.com.br') return '00002';
+    return 'N/A';
+  };
+
   return (
     <div className="min-h-screen bg-dark-bg text-white p-6">
+      <ProjectBanner project={project} />
       <div className="max-w-7xl mx-auto">
         {/* Navigation & Actions */}
         <div className="flex justify-between items-center mb-8">
@@ -391,29 +447,27 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
           </button>
           
           <div className="flex items-center gap-4">
-            {userProfile && (
-              <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(188,19,254,0.3)]">
-                  {userProfile.photoURL ? (
-                    <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple text-xl font-bold">
-                      {userProfile.name?.charAt(0)}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col items-center">
-                  <span className="text-sm font-bold text-white leading-none">{userProfile.name}</span>
-                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Mat: {userProfile.matricula}</span>
-                </div>
+            <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
+              <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(0,80,153,0.3)]">
+                {userProfile?.photoURL ? (
+                  <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full bg-neon-purple/20 flex items-center justify-center text-neon-purple text-xl font-bold uppercase">
+                    {getDisplayName(userProfile, auth.currentUser?.email).charAt(0)}
+                  </div>
+                )}
               </div>
-            )}
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-bold text-white leading-none">{getDisplayName(userProfile, auth.currentUser?.email)}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Mat: {getDisplayMatricula(userProfile, auth.currentUser?.email)}</span>
+              </div>
+            </div>
             <button 
               onClick={generateProjectReport}
               className="flex items-center gap-2 px-4 py-2 bg-neon-green/10 text-neon-green border border-neon-green/20 rounded-xl hover:bg-neon-green/20 transition-all font-bold text-sm"
             >
               <Download className="w-4 h-4" />
-              GERAR RELATÓRIO DO PROJETO
+              GERAR RESUMO DO PROJETO
             </button>
           </div>
         </div>
@@ -439,13 +493,53 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
                 </span>
               </div>
               <h1 className="text-5xl font-black tracking-tighter mb-4">{project.name}</h1>
-              <p className="text-gray-400 text-lg leading-relaxed max-w-3xl">
-                {project.description}
-              </p>
+              {isEditingDescription ? (
+                <div className="flex flex-col gap-2 max-w-3xl">
+                  <textarea
+                    value={editingDescription}
+                    onChange={(e) => setEditingDescription(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 rounded-xl p-4 focus:outline-none focus:border-neon-purple transition-all resize-none text-gray-300 leading-relaxed"
+                    rows={3}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        await handleSaveSection('description', editingDescription);
+                        setIsEditingDescription(false);
+                      }}
+                      className="px-4 py-2 bg-neon-purple text-white rounded-lg text-sm font-bold hover:bg-neon-purple/80 transition-colors"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditingDescription(project.description);
+                        setIsEditingDescription(false);
+                      }}
+                      className="px-4 py-2 bg-white/10 text-white rounded-lg text-sm font-bold hover:bg-white/20 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="group relative max-w-3xl">
+                  <p className="text-gray-400 text-lg leading-relaxed">
+                    {project.description}
+                  </p>
+                  <button
+                    onClick={() => setIsEditingDescription(true)}
+                    className="absolute -right-8 top-0 p-2 text-gray-600 hover:text-neon-purple transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3">
-              {professorProfile && professorProfile.telefone && auth.currentUser?.uid !== project.userId && (
+              {professorProfile && professorProfile.telefone && auth.currentUser?.id !== project.userId && (
                 <button 
                   onClick={handleNotifyProfessor}
                   className="flex items-center gap-2 px-6 py-3 bg-green-500/10 text-green-500 border border-green-500/20 rounded-xl hover:bg-green-500/20 transition-all font-bold text-sm"
@@ -470,8 +564,8 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
         <div className="flex flex-nowrap overflow-x-auto gap-2 mb-8 border-b border-white/5 pb-4 no-scrollbar scroll-smooth">
           {[
             { id: 'kanban', label: 'Kanban', icon: <LayoutDashboard className="w-4 h-4" /> },
+            { id: 'relatorio', label: 'Resumo Expandido', icon: <FileText className="w-4 h-4" /> },
             { id: 'canvas', label: 'BM Canvas', icon: <FileText className="w-4 h-4" /> },
-            { id: 'relatorio', label: 'Relatório', icon: <FileText className="w-4 h-4" /> },
             { id: 'banner', label: 'Banner', icon: <ImageIcon className="w-4 h-4" /> },
             { id: 'prototipo', label: 'Protótipo', icon: <Box className="w-4 h-4" /> },
             { id: 'pitch', label: 'Pitch', icon: <Presentation className="w-4 h-4" /> },
@@ -533,7 +627,44 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
                               exit={{ opacity: 0, scale: 0.95 }}
                               className="bg-dark-card p-4 rounded-xl border border-white/5 hover:border-white/10 group relative"
                             >
-                              <p className="text-sm mb-4">{task.title}</p>
+                              {editingTaskId === task.id ? (
+                                <div className="flex items-center gap-2 mb-4">
+                                  <input
+                                    type="text"
+                                    value={editingTaskTitle}
+                                    onChange={(e) => setEditingTaskTitle(e.target.value)}
+                                    className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-1 text-sm focus:outline-none focus:border-neon-purple"
+                                    autoFocus
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        await updateTaskTitle(task.id, editingTaskTitle);
+                                        setEditingTaskId(null);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingTaskId(null);
+                                      }
+                                    }}
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      await updateTaskTitle(task.id, editingTaskTitle);
+                                      setEditingTaskId(null);
+                                    }}
+                                    className="p-1 text-neon-green hover:bg-neon-green/10 rounded"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <p 
+                                  className="text-sm mb-4 cursor-pointer hover:text-neon-purple transition-colors"
+                                  onClick={() => {
+                                    setEditingTaskId(task.id);
+                                    setEditingTaskTitle(task.title);
+                                  }}
+                                >
+                                  {task.title}
+                                </p>
+                              )}
                               <div className="flex justify-between items-center">
                                 <div className="flex gap-1">
                                   {kanbanColumns.map(c => (
@@ -548,12 +679,26 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
                                     />
                                   ))}
                                 </div>
-                                <button 
-                                  onClick={() => deleteTask(task.id)}
-                                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-600 hover:text-red-500 transition-all"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                  <button 
+                                    onClick={() => {
+                                      setEditingTaskId(task.id);
+                                      setEditingTaskTitle(task.title);
+                                    }}
+                                    className="p-1 text-gray-600 hover:text-neon-purple transition-colors"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      deleteTask(task.id);
+                                    }}
+                                    className="p-1 text-gray-600 hover:text-red-500 transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
                               </div>
                             </motion.div>
                           ))}
@@ -697,36 +842,63 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                   <FileText className="w-6 h-6 text-neon-green" />
-                  Relatório do Projeto
+                  Resumo Expandido do Projeto
                 </h2>
-                <button 
-                  onClick={handleGenerateReportIA}
-                  disabled={loadingIA}
-                  className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
-                >
-                  {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  Gerar com IA
-                </button>
+                <div className="flex gap-3">
+                  <label className="neon-button flex items-center gap-2 px-4 py-2 text-sm cursor-pointer bg-white/5 hover:bg-white/10">
+                    <ImageIcon className="w-4 h-4" />
+                    Enviar Arquivo (.txt)
+                    <input 
+                      type="file" 
+                      accept=".txt" 
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const text = await file.text();
+                          setRelatorio(text);
+                          handleSaveSection('relatorio', text);
+                        }
+                      }}
+                    />
+                  </label>
+                  <button 
+                    onClick={() => {
+                      const blob = new Blob([relatorio], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `Resumo_Expandido_${project.name.replace(/\s+/g, '_')}.txt`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                    disabled={!relatorio}
+                    className="neon-button flex items-center gap-2 px-4 py-2 text-sm bg-white/5 hover:bg-white/10"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </button>
+                  <button 
+                    onClick={handleGenerateReportIA}
+                    disabled={loadingIA}
+                    className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
+                  >
+                    {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Gerar com IA
+                  </button>
+                </div>
               </div>
               <div className="space-y-6">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Resumo do Relatório</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Conteúdo do Resumo Expandido</label>
                   <textarea 
                     value={relatorio}
                     onChange={(e) => setRelatorio(e.target.value)}
                     onBlur={() => handleSaveSection('relatorio', relatorio)}
-                    placeholder="Escreva o relatório detalhado do projeto..."
+                    placeholder="Escreva o resumo expandido detalhado do projeto (600 a 700 palavras)..."
                     className="w-full h-[200px] bg-black/30 border border-white/10 rounded-xl p-6 focus:outline-none focus:border-neon-green transition-all resize-none text-gray-300 leading-relaxed"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Link do Arquivo (Anexo)</label>
-                  <input 
-                    type="text"
-                    value={project.relatorioFile || ''}
-                    onChange={(e) => handleSaveSection('relatorioFile', e.target.value)}
-                    placeholder="Cole o link do arquivo (Google Drive, Dropbox, etc)..."
-                    className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-green transition-all"
                   />
                 </div>
               </div>
@@ -814,14 +986,34 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
                   <Presentation className="w-6 h-6 text-neon-purple" />
                   Pitch
                 </h2>
-                <button 
-                  onClick={handleGeneratePitchIA}
-                  disabled={loadingIA}
-                  className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
-                >
-                  {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  Gerar Roteiro com IA
-                </button>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => {
+                      const blob = new Blob([pitch], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `Pitch_${project.name.replace(/\s+/g, '_')}.txt`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                    disabled={!pitch}
+                    className="neon-button flex items-center gap-2 px-4 py-2 text-sm bg-white/5 hover:bg-white/10"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </button>
+                  <button 
+                    onClick={handleGeneratePitchIA}
+                    disabled={loadingIA}
+                    className="neon-button flex items-center gap-2 px-4 py-2 text-sm"
+                  >
+                    {loadingIA ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Gerar Roteiro com IA
+                  </button>
+                </div>
               </div>
               <div className="space-y-6">
                 <div>
@@ -930,7 +1122,7 @@ VALÉRIA (BIBLIOTECA): ${project.approvalBiblioteca ? 'APROVADO' : 'PENDENTE'}
             <div className="w-2 h-2 rounded-full bg-white" />
             By Márcio Vinícius
           </div>
-          <div>© 2026 HUB DASHBOARD - TODOS OS DIREITOS RESERVADOS</div>
+          <div>© 2026 Project Hub Educacional - SENAI VR TODOS OS DIREITOS RESERVADOS</div>
         </footer>
       </div>
     </div>

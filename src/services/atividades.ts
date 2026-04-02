@@ -1,86 +1,84 @@
-import { collection, addDoc, query, where, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
-import { db, auth } from './firebase';
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+import { supabase, auth } from './supabase';
 
 export const createTask = async (projectId: string, title: string) => {
-  const path = 'tasks';
   try {
     if (!auth.currentUser) throw new Error('Usuário não autenticado');
-    const docRef = await addDoc(collection(db, path), {
+    const { data, error } = await supabase.from('tasks').insert([{
       projectId,
       title,
       completed: false,
       status: 'todo',
-      userId: auth.currentUser.uid,
-      createdAt: serverTimestamp(),
-    });
-    return docRef.id;
+      userId: auth.currentUser.id,
+      createdAt: new Date().toISOString(),
+    }]).select();
+    if (error) throw error;
+    return data[0].id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.error("Error creating task:", error);
+    throw error;
   }
 };
 
 export const updateTaskStatus = async (taskId: string, status: string) => {
-  const path = `tasks/${taskId}`;
   try {
-    await updateDoc(doc(db, 'tasks', taskId), { status });
+    const { error } = await supabase.from('tasks').update({ status }).eq('id', taskId);
+    if (error) throw error;
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    console.error("Error updating task status:", error);
+    throw error;
   }
 };
 
 export const getTasks = (projectId: string, callback: (tasks: any[]) => void) => {
-  const path = 'tasks';
   if (!auth.currentUser) return () => {};
   
-  const q = query(collection(db, path), where('projectId', '==', projectId));
-  
-  return onSnapshot(q, (snapshot) => {
-    const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    callback(tasks);
-  }, (error) => {
-    handleFirestoreError(error, OperationType.LIST, path);
-  });
+  const fetchTasks = async () => {
+    const { data, error } = await supabase.from('tasks').select('*').eq('projectId', projectId);
+    if (!error && data) {
+      callback(data);
+    }
+  };
+
+  fetchTasks();
+
+  const subscription = supabase
+    .channel(`tasks_changes_${projectId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `projectId=eq.${projectId}` }, () => {
+      fetchTasks();
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(subscription);
+  };
 };
 
 export const toggleTask = async (taskId: string, completed: boolean) => {
-  const path = `tasks/${taskId}`;
   try {
-    await updateDoc(doc(db, 'tasks', taskId), { completed: !completed });
+    const { error } = await supabase.from('tasks').update({ completed: !completed }).eq('id', taskId);
+    if (error) throw error;
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    console.error("Error toggling task:", error);
+    throw error;
+  }
+};
+
+export const updateTaskTitle = async (taskId: string, title: string) => {
+  try {
+    const { error } = await supabase.from('tasks').update({ title }).eq('id', taskId);
+    if (error) throw error;
+  } catch (error) {
+    console.error("Error updating task title:", error);
+    throw error;
   }
 };
 
 export const deleteTask = async (taskId: string) => {
-  const path = `tasks/${taskId}`;
   try {
-    await deleteDoc(doc(db, 'tasks', taskId));
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    if (error) throw error;
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.error("Error deleting task:", error);
+    throw error;
   }
 };

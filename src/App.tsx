@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from './services/firebase';
+import { User } from '@supabase/supabase-js';
+import { supabase, auth } from './services/supabase';
 import Login from './screens/Login';
 import Dashboard from './screens/Dashboard';
 import ProjectDetail from './screens/ProjectDetail';
@@ -12,12 +12,47 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    const mockUserStr = localStorage.getItem('mock_user');
+    if (mockUserStr) {
+      try {
+        const mockUser = JSON.parse(mockUserStr);
+        setUser(mockUser);
+        auth.currentUser = mockUser;
+        setLoading(false);
+        return;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      auth.currentUser = session?.user ?? null;
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!localStorage.getItem('mock_user')) {
+        setUser(session?.user ?? null);
+        auth.currentUser = session?.user ?? null;
+      }
+    });
+
+    // Custom event listener for mock logout
+    const handleStorageChange = () => {
+      if (!localStorage.getItem('mock_user')) {
+        setUser(null);
+        auth.currentUser = null;
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('mock_logout', handleStorageChange);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('mock_logout', handleStorageChange);
+    };
   }, []);
 
   if (loading) {
