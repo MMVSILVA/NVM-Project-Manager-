@@ -39,6 +39,7 @@ interface Project {
   prototipo?: string;
   pitch?: string;
   professorPhoto?: string;
+  professorName?: string;
   createdAt?: any;
 }
 

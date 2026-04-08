@@ -133,7 +133,7 @@ export default function Login() {
       >
         <div className="flex flex-col items-center justify-center mb-6 gap-4">
           <div className="bg-white px-6 py-3 rounded-lg flex items-center justify-center h-20 w-48">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/8/86/Senai_Logo.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
+            <img src="/logo-senai.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-center">
             Project Hub Educacional <span className="text-neon-purple">Senai - VR</span>

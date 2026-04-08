@@ -22,6 +22,7 @@ interface Project {
   approvalBiblioteca: boolean;
   userId: string;
   professorPhoto?: string;
+  professorName?: string;
   // Canvas Fields
   canvasParceiros?: string;
   canvasAtividades?: string;
@@ -366,7 +367,7 @@ export default function Dashboard() {
       <header className="max-w-7xl mx-auto flex justify-between items-center mb-12">
         <div className="flex items-center gap-3">
           <div className="bg-white px-3 py-1 rounded flex items-center justify-center h-10 w-24">
-            <img src="https://upload.wikimedia.org/wikipedia/commons/8/86/Senai_Logo.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
+            <img src="/logo-senai.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-black tracking-tighter uppercase">
             Project Hub Educacional <span className="text-neon-green">Senai - VR</span>
@@ -540,8 +541,8 @@ export default function Dashboard() {
                         outerRadius={80}
                         paddingAngle={5}
                         dataKey="value"
-                        onClick={(data) => {
-                          setStatusFilter(statusFilter === data.id ? 'all' : data.id);
+                        onClick={(data: any) => {
+                          setStatusFilter(statusFilter === data.payload.id ? 'all' : data.payload.id);
                           // Scroll to projects list
                           document.getElementById('projects-list')?.scrollIntoView({ behavior: 'smooth' });
                         }}

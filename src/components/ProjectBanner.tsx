@@ -1,5 +1,19 @@
 import React from 'react';
-import { Project } from '../services/supabase';
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  turma: string;
+  curso: string;
+  startDate: string;
+  endDate: string;
+  approvalProfessor: boolean;
+  approvalBiblioteca: boolean;
+  userId: string;
+  teamMembers?: { name: string }[];
+  professorName?: string;
+}
 
 interface ProjectBannerProps {
   project: Project;

@@ -1,7 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">
-  <g fill="#005099" font-family="Arial, sans-serif" font-weight="900" font-style="italic" font-size="85">
-    <text x="10" y="80">SENA</text>
-    <path d="M 330 80 L 350 80 L 360 40 L 340 40 Z" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 150">
+  <!-- Transparent background -->
+  <rect width="500" height="150" fill="transparent" />
+  
+  <!-- SENA in Blue, I in Orange -->
+  <g font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="130" transform="translate(20, 0)">
+    <text x="10" y="115" fill="#005099" letter-spacing="-2">SENA</text>
+    <text x="365" y="115" fill="#F26A21">I</text>
   </g>
-  <path d="M 345 30 L 365 30 L 370 10 L 350 10 Z" fill="#F26A21" />
 </svg>
