@@ -365,8 +365,8 @@ export default function Dashboard() {
       {/* Header */}
       <header className="max-w-7xl mx-auto flex justify-between items-center mb-12">
         <div className="flex items-center gap-3">
-          <div className="bg-white px-3 py-1 rounded flex items-center justify-center">
-            <span className="text-[#005099] font-black text-2xl tracking-tighter leading-none">SENAI</span>
+          <div className="bg-white px-3 py-1 rounded flex items-center justify-center h-10 w-24">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/8/86/Senai_Logo.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-2xl font-black tracking-tighter uppercase">
             Project Hub Educacional <span className="text-neon-green">Senai - VR</span>
