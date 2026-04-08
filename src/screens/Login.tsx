@@ -76,6 +76,10 @@ export default function Login() {
         message = 'E-mail ou senha incorretos';
       } else if (error.message?.includes('User already registered')) {
         message = 'Este e-mail já está em uso';
+      } else if (error.message?.includes('Email not confirmed')) {
+        message = 'Por favor, confirme seu e-mail clicando no link que enviamos para você.';
+      } else if (error.message) {
+        message = `Erro: ${error.message}`;
       }
       setError(message);
     } finally {
