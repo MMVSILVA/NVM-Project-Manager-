@@ -1,9 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+let aiInstance: GoogleGenAI | null = null;
+
+const getAI = () => {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("GEMINI_API_KEY is missing. AI features will not work.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey: apiKey || "missing_key" });
+  }
+  return aiInstance;
+};
 
 export const generateProjectDescription = async (projectName: string) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere uma descrição profissional e inspiradora para um projeto educacional chamado "${projectName}". A descrição deve ser curta e direta, focada em SaaS educacional.`,
@@ -17,6 +29,7 @@ export const generateProjectDescription = async (projectName: string) => {
 
 export const generateTasks = async (projectName: string) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere uma lista de 5 tarefas essenciais para iniciar o projeto educacional "${projectName}". Retorne apenas as tarefas em formato JSON.`,
@@ -45,6 +58,7 @@ export const generateTasks = async (projectName: string) => {
 
 export const generateCanvas = async (projectName: string, projectDescription: string) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere um Business Model Canvas para o projeto educacional "${projectName}". Descrição base: ${projectDescription}. Retorne os 9 blocos em formato JSON.`,
@@ -76,6 +90,7 @@ export const generateCanvas = async (projectName: string, projectDescription: st
 
 export const generateReport = async (projectName: string, description: string) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere um Resumo Expandido para o projeto "${projectName}". Descrição base: ${description}. O resumo expandido deve ter entre 600 e 700 palavras, e incluir Introdução, Metodologia, Resultados e Conclusão, seguindo o padrão acadêmico.`,
@@ -89,6 +104,7 @@ export const generateReport = async (projectName: string, description: string) =
 
 export const generateBannerContent = async (projectName: string, projectDescription: string) => {
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Gere o conteúdo textual para um banner de apresentação do projeto "${projectName}". Descrição base: ${projectDescription}. Inclua título, slogan, 3 pontos principais e um call to action.`,
@@ -102,6 +118,7 @@ export const generateBannerContent = async (projectName: string, projectDescript
 
 export const generatePitchScript = async (projectName: string, projectDescription: string, relatorio?: string) => {
   try {
+    const ai = getAI();
     const context = relatorio ? `Baseie-se no seguinte Resumo Expandido do projeto:\n${relatorio}` : `Descrição base: ${projectDescription}`;
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
