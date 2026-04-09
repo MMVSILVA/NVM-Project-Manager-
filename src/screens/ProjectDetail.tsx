@@ -89,6 +89,12 @@ export default function ProjectDetail() {
                   auth.currentUser?.email === 'marcio.s@docente.firjan.senai.br' ||
                   auth.currentUser?.email === 'marcio.v.silva@docente.firjan.senai.br';
 
+  const isOwner = auth.currentUser?.id === project?.userId;
+  const isProfessor = auth.currentUser?.email === 'mmvsilva@firjan.com.br' || 
+                      auth.currentUser?.email === 'marcio.s@docente.firjan.senai.br' || 
+                      auth.currentUser?.email === 'marcio.v.silva@docente.firjan.senai.br' || 
+                      isOwner;
+
   // Form states for sections
   const [canvasData, setCanvasData] = useState({
     parceiros: '',
@@ -213,9 +219,7 @@ export default function ProjectDetail() {
 
     // Email restrictions
     const userEmail = auth.currentUser?.email;
-    const isOwner = auth.currentUser?.id === project.userId;
-    const isProfessor = userEmail === 'mmvsilva@firjan.com.br' || userEmail === 'marcio.s@docente.firjan.senai.br' || userEmail === 'marcio.v.silva@docente.firjan.senai.br' || isOwner;
-    const isBiblioteca = userEmail === 'vasouza@firjan.com.br';
+    const isBiblioteca = isAdmin;
 
     if (type === 'Professor' && !isProfessor) {
       alert('Apenas o Professor Orientador (ou o criador do projeto) pode aprovar esta etapa.');
@@ -1252,7 +1256,7 @@ export default function ProjectDetail() {
                   <div className="flex gap-2">
                     <button 
                       onClick={() => setShowValeriaEvalModal(true)}
-                      disabled={!project.approvalProfessor || auth.currentUser?.email !== 'vasouza@firjan.com.br'}
+                      disabled={!project.approvalProfessor || !isAdmin}
                       className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${
                         project.approvalBibliotecaStatus === 'approved' 
                           ? 'bg-neon-green text-black' 
@@ -1280,7 +1284,7 @@ export default function ProjectDetail() {
                     <ShieldCheck className="w-3 h-3" /> Aguardando aprovação do Professor
                   </p>
                 )}
-                {project.approvalProfessor && auth.currentUser?.email !== 'vasouza@firjan.com.br' && !project.approvalBibliotecaStatus && (
+                {project.approvalProfessor && !isAdmin && !project.approvalBibliotecaStatus && (
                   <p className="text-xs text-orange-500 mt-4 flex items-center gap-1 font-bold">
                     <Clock className="w-3 h-3" /> Aguardando avaliação da Biblioteca
                   </p>
