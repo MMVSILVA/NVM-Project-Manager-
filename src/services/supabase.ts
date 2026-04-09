@@ -47,7 +47,7 @@ export const logout = async () => {
   return supabase.auth.signOut();
 };
 
-export const saveUserProfile = async (uid: string, data: { name: string, matricula: string, telefone?: string, photoURL?: string, email: string }) => {
+export const saveUserProfile = async (uid: string, data: { name: string, preferredName?: string, matricula: string, telefone?: string, photoURL?: string, email: string }) => {
   try {
     localStorage.setItem(`user_profile_${uid}`, JSON.stringify(data));
     const { error } = await supabase.from('users').upsert({ id: uid, ...data });

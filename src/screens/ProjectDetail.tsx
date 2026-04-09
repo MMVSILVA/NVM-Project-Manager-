@@ -544,10 +544,24 @@ export default function ProjectDetail() {
   ];
 
   const getDisplayName = (profile: any, email: string | undefined) => {
-    if (profile?.name) return profile.name;
-    if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') return 'Márcio Vinícius';
-    if (email === 'vasouza@firjan.com.br') return 'V. Souza';
-    return email?.split('@')[0] || 'Usuário';
+    if (profile?.preferredName) return profile.preferredName;
+    
+    let fullName = '';
+    if (profile?.name) {
+      fullName = profile.name;
+    } else if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') {
+      fullName = 'Márcio Vinícius';
+    } else if (email === 'vasouza@firjan.com.br') {
+      fullName = 'Valéria Souza';
+    } else {
+      fullName = email?.split('@')[0] || 'Usuário';
+    }
+    
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length > 1) {
+      return `${parts[0]} ${parts[parts.length - 1]}`;
+    }
+    return parts[0];
   };
 
   const getDisplayMatricula = (profile: any, email: string | undefined) => {
@@ -576,7 +590,7 @@ export default function ProjectDetail() {
       <ProjectBanner project={project} />
       <div className="max-w-7xl mx-auto">
         {/* Navigation & Actions */}
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
           <button 
             onClick={() => navigate('/')}
             className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors group"
@@ -585,7 +599,7 @@ export default function ProjectDetail() {
             Voltar ao Dashboard
           </button>
           
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap justify-center md:justify-end items-center gap-4">
             <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(0,80,153,0.3)]">
                 {userProfile?.photoURL ? (
@@ -872,12 +886,12 @@ export default function ProjectDetail() {
 
           {activeTab === 'canvas' && (
             <div className="bg-dark-card p-8 rounded-2xl border border-white/5">
-              <div className="flex justify-between items-center mb-8">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                   <FileText className="w-6 h-6 text-neon-purple" />
                   Business Model Canvas
                 </h2>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap justify-center gap-3">
                   <button 
                     onClick={handleGenerateCanvasIA}
                     disabled={loadingIA}

@@ -62,7 +62,7 @@ export default function Dashboard() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [viewAll, setViewAll] = useState(true);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
-  const [editProfileData, setEditProfileData] = useState({ name: '', matricula: '', telefone: '', photoURL: '' });
+  const [editProfileData, setEditProfileData] = useState({ name: '', preferredName: '', matricula: '', telefone: '', photoURL: '' });
   const navigate = useNavigate();
 
   const isAdmin = auth.currentUser?.email === 'mmvsilva@firjan.com.br' || 
@@ -514,10 +514,24 @@ export default function Dashboard() {
   };
 
   const getDisplayName = (profile: any, email: string | undefined) => {
-    if (profile?.name) return profile.name;
-    if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') return 'Márcio Vinícius';
-    if (email === 'vasouza@firjan.com.br') return 'V. Souza';
-    return email?.split('@')[0] || 'Usuário';
+    if (profile?.preferredName) return profile.preferredName;
+    
+    let fullName = '';
+    if (profile?.name) {
+      fullName = profile.name;
+    } else if (email === 'mmvsilva@firjan.com.br' || email === 'marcio.s@docente.firjan.senai.br' || email === 'marcio.v.silva@docente.firjan.senai.br') {
+      fullName = 'Márcio Vinícius';
+    } else if (email === 'vasouza@firjan.com.br') {
+      fullName = 'Valéria Souza';
+    } else {
+      fullName = email?.split('@')[0] || 'Usuário';
+    }
+    
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length > 1) {
+      return `${parts[0]} ${parts[parts.length - 1]}`;
+    }
+    return parts[0];
   };
 
   const getDisplayMatricula = (profile: any, email: string | undefined) => {
@@ -530,8 +544,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-dark-bg text-white p-6">
       {/* Header */}
-      <header className="max-w-7xl mx-auto flex justify-between items-center mb-12">
-        <div className="flex items-center gap-3">
+      <header className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
+        <div className="flex flex-col md:flex-row items-center gap-3 text-center md:text-left">
           <div className="bg-white px-3 py-1 rounded flex items-center justify-center h-10 w-24">
             <img src="/logo-senai.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
           </div>
@@ -541,12 +555,13 @@ export default function Dashboard() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap justify-center md:justify-end items-center gap-4">
           <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10 relative group">
             <button 
               onClick={() => {
                 setEditProfileData({
                   name: userProfile?.name || '',
+                  preferredName: userProfile?.preferredName || '',
                   matricula: userProfile?.matricula || '',
                   telefone: userProfile?.telefone || '',
                   photoURL: userProfile?.photoURL || ''
@@ -867,11 +882,21 @@ export default function Dashboard() {
 
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Nome Completo</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Nome e Sobrenome</label>
                   <input
                     type="text"
                     value={editProfileData.name}
                     onChange={(e) => setEditProfileData({ ...editProfileData, name: e.target.value })}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Nome Preferido (Como aparecerá no perfil)</label>
+                  <input
+                    type="text"
+                    value={editProfileData.preferredName}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, preferredName: e.target.value })}
+                    placeholder="Ex: Prof. Márcio"
                     className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
                   />
                 </div>

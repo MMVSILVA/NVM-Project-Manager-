@@ -1,21 +1,17 @@
 {
-  "name": "HUB DASHBOARD",
-  "short_name": "HUB DASH",
-  "description": "Dashboard de Gestão de Projetos Educacionais",
+  "name": "Project Hub Educacional SENAI",
+  "short_name": "Project Hub",
+  "description": "Plataforma de gestão de projetos educacionais do SENAI VR.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#050505",
-  "theme_color": "#BC13FE",
+  "background_color": "#0a0a0a",
+  "theme_color": "#005099",
   "icons": [
     {
-      "src": "https://picsum.photos/seed/hubdash/192/192",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "https://picsum.photos/seed/hubdash/512/512",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/logo-senai.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ]
 }
