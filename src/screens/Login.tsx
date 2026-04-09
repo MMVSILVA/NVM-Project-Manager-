@@ -136,7 +136,8 @@ export default function Login() {
             <img src="/logo-senai.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-4xl font-black tracking-tighter text-center">
-            Project Hub Educacional <span className="text-neon-purple">Senai - VR</span>
+            Project Hub Educacional <br />
+            <span className="text-[#F26A21]">Senai - VR</span>
           </h1>
         </div>
         

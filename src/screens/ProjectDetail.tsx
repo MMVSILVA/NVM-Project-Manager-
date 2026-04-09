@@ -40,6 +40,9 @@ interface Project {
   pitch?: string;
   professorPhoto?: string;
   professorName?: string;
+  approvalBibliotecaStatus?: 'approved' | 'reservations' | 'rejected' | 'pending';
+  approvalBibliotecaMessage?: string;
+  presentationDate?: string;
   createdAt?: any;
 }
 
@@ -72,6 +75,9 @@ export default function ProjectDetail() {
     type: 'Professor' | 'Biblioteca' | null;
     message: string;
   }>({ isOpen: false, type: null, message: '' });
+  const [showValeriaEvalModal, setShowValeriaEvalModal] = useState(false);
+  const [valeriaEvalStatus, setValeriaEvalStatus] = useState<'approved' | 'reservations' | 'rejected'>('approved');
+  const [valeriaEvalMessage, setValeriaEvalMessage] = useState('');
 
   // Form states for sections
   const [canvasData, setCanvasData] = useState({
@@ -246,6 +252,52 @@ export default function ProjectDetail() {
       }
     } catch (error) {
       console.error(`Error updating ${type} approval:`, error);
+    }
+  };
+
+  const handleValeriaEvaluation = async () => {
+    if (!project || !id) return;
+    try {
+      await updateProject(id, { 
+        approvalBibliotecaStatus: valeriaEvalStatus,
+        approvalBibliotecaMessage: valeriaEvalMessage,
+        approvalBiblioteca: valeriaEvalStatus === 'approved'
+      });
+      setProject({ 
+        ...project, 
+        approvalBibliotecaStatus: valeriaEvalStatus,
+        approvalBibliotecaMessage: valeriaEvalMessage,
+        approvalBiblioteca: valeriaEvalStatus === 'approved'
+      });
+      
+      setShowValeriaEvalModal(false);
+
+      // Prepare notification message
+      let defaultMessage = '';
+      if (valeriaEvalStatus === 'approved') {
+        defaultMessage = `\uD83C\uDF89 *PROJETO APROVADO PELA BIBLIOTECA!* \uD83C\uDF89\n\n` +
+          `Olá Professor ${professorProfile?.name || ''}, o projeto "${project.name}" foi aprovado pela coordenação/biblioteca e está pronto para os próximos passos!`;
+      } else if (valeriaEvalStatus === 'reservations') {
+        defaultMessage = `⚠️ *PROJETO APROVADO COM RESSALVAS* ⚠️\n\n` +
+          `Olá Professor ${professorProfile?.name || ''}, o projeto "${project.name}" foi avaliado pela biblioteca com algumas ressalvas:\n\n` +
+          `${valeriaEvalMessage}\n\n` +
+          `Por favor, verifique os ajustes necessários.`;
+      } else if (valeriaEvalStatus === 'rejected') {
+        defaultMessage = `❌ *PROJETO REPROVADO* ❌\n\n` +
+          `Olá Professor ${professorProfile?.name || ''}, o projeto "${project.name}" não foi aprovado pela biblioteca.\n\n` +
+          `*Motivo:*\n${valeriaEvalMessage}\n\n` +
+          `Por favor, revise o projeto e submeta novamente.`;
+      }
+
+      setShowApprovalModal({
+        isOpen: true,
+        type: 'Biblioteca',
+        message: defaultMessage
+      });
+
+    } catch (error) {
+      console.error('Error updating Valeria evaluation:', error);
+      alert('Erro ao salvar avaliação.');
     }
   };
 
@@ -495,6 +547,20 @@ export default function ProjectDetail() {
     return 'N/A';
   };
 
+  // Calculate Delivery Date (30 days before end date)
+  const deliveryDate = project?.endDate ? new Date(new Date(project.endDate).getTime() - 30 * 24 * 60 * 60 * 1000) : null;
+  const daysUntilDelivery = deliveryDate ? Math.ceil((deliveryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
+
+  const handleNotifyDeadline = (days: number) => {
+    if (!project || !professorProfile || !professorProfile.telefone) {
+      alert('Telefone do professor não encontrado.');
+      return;
+    }
+    const message = `⚠️ *ALERTA DE PRAZO!* ⚠️\n\nOlá Professor ${professorProfile.name}, faltam apenas *${days} dias* para o prazo de entrega do projeto "${project.name}".\n\nData limite para entrega: ${deliveryDate?.toLocaleDateString('pt-BR')}`;
+    const phone = professorProfile.telefone.replace(/\D/g, '');
+    window.open(`https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   return (
     <div className="min-h-screen bg-dark-bg text-white p-6">
       <ProjectBanner project={project} />
@@ -534,6 +600,27 @@ export default function ProjectDetail() {
             </button>
           </div>
         </div>
+
+        {/* Deadline Alert */}
+        {daysUntilDelivery !== null && daysUntilDelivery <= 40 && daysUntilDelivery >= 0 && (
+          <div className={`mb-8 p-4 rounded-xl border flex items-center justify-between ${daysUntilDelivery <= 10 ? 'bg-red-500/10 border-red-500/30 text-red-400' : daysUntilDelivery <= 20 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
+            <div className="flex items-center gap-3">
+              <Clock className="w-6 h-6" />
+              <div>
+                <h4 className="font-bold">Atenção ao Prazo de Entrega!</h4>
+                <p className="text-sm opacity-80">Faltam {daysUntilDelivery} dias para a entrega do projeto (30 dias antes do término do curso).</p>
+              </div>
+            </div>
+            {(daysUntilDelivery === 20 || daysUntilDelivery === 10) && auth.currentUser?.email === 'vasouza@firjan.com.br' && (
+              <button 
+                onClick={() => handleNotifyDeadline(daysUntilDelivery)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition-colors"
+              >
+                Notificar Professor
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Project Header */}
         <header className="mb-12">
@@ -1132,49 +1219,87 @@ export default function ProjectDetail() {
                 </div>
               </div>
 
-              <div className={`p-8 rounded-2xl border transition-all ${project.approvalBiblioteca ? 'bg-neon-green/10 border-neon-green/30' : 'bg-dark-card border-white/5'} ${!project.approvalProfessor ? 'opacity-50 grayscale' : ''}`}>
-                <div className="flex items-center justify-between">
+              <div className={`p-8 rounded-2xl border transition-all ${project.approvalBibliotecaStatus === 'approved' ? 'bg-neon-green/10 border-neon-green/30' : project.approvalBibliotecaStatus === 'reservations' ? 'bg-orange-500/10 border-orange-500/30' : project.approvalBibliotecaStatus === 'rejected' ? 'bg-red-500/10 border-red-500/30' : 'bg-dark-card border-white/5'} ${!project.approvalProfessor ? 'opacity-50 grayscale' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-xl font-bold mb-1">2. Valéria - Biblioteca</h3>
-                    <p className="text-sm text-gray-500">Registro e arquivamento no acervo da biblioteca.</p>
+                    <p className="text-sm text-gray-500">Avaliação, registro e arquivamento no acervo da biblioteca.</p>
                   </div>
                   <div className="flex gap-2">
-                    {project.approvalProfessor && !project.approvalBiblioteca && (
-                      <div className="flex gap-2 mr-4">
-                        <button 
-                          onClick={() => handleNotifyValeria('whatsapp')}
-                          className="p-2 bg-green-500/20 text-green-500 rounded-lg hover:bg-green-500/30 transition-all"
-                          title="Notificar via WhatsApp"
-                        >
-                          <MessageCircle className="w-5 h-5" />
-                        </button>
-                        <button 
-                          onClick={() => handleNotifyValeria('email')}
-                          className="p-2 bg-blue-500/20 text-blue-500 rounded-lg hover:bg-blue-500/30 transition-all"
-                          title="Notificar via E-mail"
-                        >
-                          <Mail className="w-5 h-5" />
-                        </button>
-                      </div>
-                    )}
                     <button 
-                      onClick={() => handleApproval('Biblioteca')}
-                      disabled={!project.approvalProfessor}
+                      onClick={() => setShowValeriaEvalModal(true)}
+                      disabled={!project.approvalProfessor || auth.currentUser?.email !== 'vasouza@firjan.com.br'}
                       className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${
-                        project.approvalBiblioteca 
+                        project.approvalBibliotecaStatus === 'approved' 
                           ? 'bg-neon-green text-black' 
+                          : project.approvalBibliotecaStatus === 'reservations'
+                          ? 'bg-orange-500 text-black'
+                          : project.approvalBibliotecaStatus === 'rejected'
+                          ? 'bg-red-500 text-white'
                           : 'bg-white/5 text-white hover:bg-white/10'
                       }`}
                     >
-                      {project.approvalBiblioteca ? 'APROVADO' : 'APROVAR'}
+                      {project.approvalBibliotecaStatus === 'approved' ? 'APROVADO' : project.approvalBibliotecaStatus === 'reservations' ? 'COM RESSALVAS' : project.approvalBibliotecaStatus === 'rejected' ? 'REPROVADO' : 'AVALIAR PROJETO'}
                     </button>
                   </div>
                 </div>
+                
+                {project.approvalBibliotecaMessage && (
+                  <div className="mt-4 p-4 bg-black/30 rounded-lg border border-white/5">
+                    <p className="text-sm font-bold text-gray-400 mb-2">Mensagem de Retorno:</p>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap">{project.approvalBibliotecaMessage}</p>
+                  </div>
+                )}
+
                 {!project.approvalProfessor && (
                   <p className="text-xs text-red-500 mt-4 flex items-center gap-1 font-bold">
                     <ShieldCheck className="w-3 h-3" /> Aguardando aprovação do Professor
                   </p>
                 )}
+                {project.approvalProfessor && auth.currentUser?.email !== 'vasouza@firjan.com.br' && !project.approvalBibliotecaStatus && (
+                  <p className="text-xs text-orange-500 mt-4 flex items-center gap-1 font-bold">
+                    <Clock className="w-3 h-3" /> Aguardando avaliação da Biblioteca
+                  </p>
+                )}
+              </div>
+
+              {/* Presentation Date Section */}
+              <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-xl font-bold mb-1">3. Data de Apresentação</h3>
+                    <p className="text-sm text-gray-500">Agendamento da apresentação final do projeto.</p>
+                  </div>
+                </div>
+                <div className="flex items-end gap-4">
+                  <div className="flex-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Data e Hora</label>
+                    <input 
+                      type="datetime-local"
+                      value={project.presentationDate || ''}
+                      onChange={(e) => handleSaveSection('presentationDate', e.target.value)}
+                      disabled={auth.currentUser?.email !== 'vasouza@firjan.com.br'}
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all disabled:opacity-50"
+                    />
+                  </div>
+                  {auth.currentUser?.email === 'vasouza@firjan.com.br' && project.presentationDate && (
+                    <button 
+                      onClick={() => {
+                        const date = new Date(project.presentationDate!).toLocaleString('pt-BR');
+                        const message = `📅 *DATA DE APRESENTAÇÃO AGENDADA!* 📅\n\nOlá Professor ${professorProfile?.name || ''}, a apresentação do projeto "${project.name}" foi agendada para:\n\n*${date}*\n\nPor favor, avise os alunos.`;
+                        setShowApprovalModal({
+                          isOpen: true,
+                          type: 'Biblioteca',
+                          message
+                        });
+                      }}
+                      className="px-6 py-4 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-xl hover:bg-neon-purple/30 transition-all font-bold text-sm flex items-center gap-2"
+                    >
+                      <Mail className="w-4 h-4" />
+                      Notificar Professor
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1187,6 +1312,87 @@ export default function ProjectDetail() {
           </div>
           <div>© 2026 Project Hub Educacional - SENAI VR TODOS OS DIREITOS RESERVADOS</div>
         </footer>
+        
+        {/* Valeria Evaluation Modal */}
+        <AnimatePresence>
+          {showValeriaEvalModal && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-dark-card border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+              >
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-full bg-neon-purple/20 flex items-center justify-center">
+                    <ShieldCheck className="w-6 h-6 text-neon-purple" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Avaliação da Biblioteca</h3>
+                    <p className="text-sm text-gray-400">Selecione o status e adicione observações.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Status da Avaliação</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={() => setValeriaEvalStatus('approved')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${valeriaEvalStatus === 'approved' ? 'bg-neon-green text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                      >
+                        Aprovado
+                      </button>
+                      <button
+                        onClick={() => setValeriaEvalStatus('reservations')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${valeriaEvalStatus === 'reservations' ? 'bg-orange-500 text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                      >
+                        Com Ressalvas
+                      </button>
+                      <button
+                        onClick={() => setValeriaEvalStatus('rejected')}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${valeriaEvalStatus === 'rejected' ? 'bg-red-500 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                      >
+                        Reprovado
+                      </button>
+                    </div>
+                  </div>
+
+                  {(valeriaEvalStatus === 'reservations' || valeriaEvalStatus === 'rejected') && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-400 mb-2">
+                        {valeriaEvalStatus === 'reservations' ? 'Quais são as ressalvas/alterações necessárias?' : 'Motivo da reprovação'}
+                      </label>
+                      <textarea
+                        value={valeriaEvalMessage}
+                        onChange={(e) => setValeriaEvalMessage(e.target.value)}
+                        placeholder="Descreva detalhadamente..."
+                        className="w-full h-32 bg-black/50 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-neon-purple resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowValeriaEvalModal(false)}
+                    className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={handleValeriaEvaluation}
+                    disabled={valeriaEvalStatus !== 'approved' && !valeriaEvalMessage.trim()}
+                    className="flex-1 py-3 rounded-xl font-bold text-sm bg-neon-purple text-white hover:bg-neon-purple/80 transition-colors disabled:opacity-50"
+                  >
+                    Salvar e Notificar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {/* Approval Notification Modal */}
         <AnimatePresence>
           {showApprovalModal.isOpen && (

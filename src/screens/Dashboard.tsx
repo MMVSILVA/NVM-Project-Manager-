@@ -23,6 +23,9 @@ interface Project {
   userId: string;
   professorPhoto?: string;
   professorName?: string;
+  approvalBibliotecaStatus?: 'approved' | 'reservations' | 'rejected' | 'pending';
+  approvalBibliotecaMessage?: string;
+  presentationDate?: string;
   // Canvas Fields
   canvasParceiros?: string;
   canvasAtividades?: string;
@@ -369,8 +372,9 @@ export default function Dashboard() {
           <div className="bg-white px-3 py-1 rounded flex items-center justify-center h-10 w-24">
             <img src="/logo-senai.svg" alt="SENAI Logo" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-2xl font-black tracking-tighter uppercase">
-            Project Hub Educacional <span className="text-neon-green">Senai - VR</span>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tighter uppercase">
+            Project Hub Educacional <br className="hidden md:block" />
+            <span className="text-[#F26A21]">Senai - VR</span>
           </h1>
         </div>
 
@@ -509,25 +513,25 @@ export default function Dashboard() {
         {/* Charts Section */}
         {projects.length > 0 && (
           <section className="mb-12">
-            <h2 className="text-2xl font-bold mb-6">Visão Geral</h2>
+            <h2 className="text-2xl font-bold mb-6 text-center md:text-left">Visão Geral</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-dark-card p-6 rounded-2xl border border-white/5">
-                <h3 className="text-lg font-bold mb-4 text-gray-400">Projetos por Curso</h3>
-                <div className="h-64">
+              <div className="bg-dark-card p-6 rounded-2xl border border-white/5 flex flex-col">
+                <h3 className="text-lg font-bold mb-4 text-gray-400 text-center">Projetos por Curso</h3>
+                <div className="h-[300px] w-full min-h-[300px] flex-1">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={projectsByCourse}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                      <XAxis dataKey="name" stroke="#888" />
-                      <YAxis stroke="#888" />
+                    <BarChart data={projectsByCourse} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                      <XAxis dataKey="name" stroke="#888" tick={{fill: '#888', fontSize: 12}} />
+                      <YAxis stroke="#888" tick={{fill: '#888', fontSize: 12}} allowDecimals={false} />
                       <Tooltip content={<CustomBarTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
-                      <Bar dataKey="value" fill="#00FF9D" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="value" fill="#00FF9D" radius={[4, 4, 0, 0]} maxBarSize={50} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-              <div className="bg-dark-card p-6 rounded-2xl border border-white/5">
-                <h3 className="text-lg font-bold mb-4 text-gray-400">Status de Aprovação (Professor)</h3>
-                <div className="h-64">
+              <div className="bg-dark-card p-6 rounded-2xl border border-white/5 flex flex-col">
+                <h3 className="text-lg font-bold mb-4 text-gray-400 text-center">Status de Aprovação (Professor)</h3>
+                <div className="h-[300px] w-full min-h-[300px] flex-1 relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -536,7 +540,7 @@ export default function Dashboard() {
                           { name: 'Pendentes', value: projects.filter(p => !p.approvalProfessor).length, id: 'pending' }
                         ]}
                         cx="50%"
-                        cy="50%"
+                        cy="45%"
                         innerRadius={60}
                         outerRadius={80}
                         paddingAngle={5}
@@ -554,7 +558,7 @@ export default function Dashboard() {
                       <Tooltip content={<CustomPieTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="flex justify-center gap-4 mt-4">
+                  <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-4">
                     <button 
                       onClick={() => setStatusFilter(statusFilter === 'approved' ? 'all' : 'approved')}
                       className={`flex items-center gap-2 px-3 py-1 rounded-full transition-all ${statusFilter === 'approved' ? 'bg-neon-green/20' : 'hover:bg-white/5'}`}
