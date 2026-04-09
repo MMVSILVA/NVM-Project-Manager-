@@ -218,23 +218,23 @@ export default function ProjectDetail() {
       if (isApproving) {
         let defaultMessage = '';
         if (type === 'Professor') {
-          defaultMessage = `📢 *NOVO PROJETO APROVADO!* 🚀\n\n` +
-            `Olá, Valéria! Tudo bem? 😊\n\n` +
+          defaultMessage = `\uD83D\uDCE2 *NOVO PROJETO APROVADO!* \uD83D\uDE80\n\n` +
+            `Olá, Valéria! Tudo bem? \uD83D\uDE0A\n\n` +
             `Temos um novo projeto aprovado e pronto para seguir para a próxima etapa de registro na biblioteca. Seguem os detalhes:\n\n` +
-            `📌 *Projeto:* ${project.name}\n` +
-            `👨‍🏫 *Professor Responsável:* ${project.professorName || 'Não informado'}\n` +
-            `🎓 *Curso:* ${project.curso || 'Não informado'}\n` +
-            `👥 *Turma:* ${project.turma || 'Não informado'}\n` +
-            `📝 *Descrição:* ${project.description || 'Sem descrição'}\n\n` +
-            `⚙️ *Próximos Passos:*\n` +
-            `➡️ Realizar o registro do projeto na biblioteca\n` +
-            `➡️ Validar informações pendentes (professor responsável)\n` +
-            `➡️ Organizar documentação complementar, se necessário\n` +
-            `➡️ Atualizar status no sistema após conclusão\n\n` +
-            `📂 Caso precise de mais informações ou ajustes, fico à disposição!\n\n` +
-            `Vamos em frente 🚀💪`;
+            `\uD83D\uDCCC *Projeto:* ${project.name}\n` +
+            `\uD83D\uDC68\u200D\uD83C\uDFEB *Professor Responsável:* ${project.professorName || 'Não informado'}\n` +
+            `\uD83C\uDF93 *Curso:* ${project.curso || 'Não informado'}\n` +
+            `\uD83D\uDC65 *Turma:* ${project.turma || 'Não informado'}\n` +
+            `\uD83D\uDCDD *Descrição:* ${project.description || 'Sem descrição'}\n\n` +
+            `\u2699\uFE0F *Próximos Passos:*\n` +
+            `\u27A1\uFE0F Realizar o registro do projeto na biblioteca\n` +
+            `\u27A1\uFE0F Validar informações pendentes (professor responsável)\n` +
+            `\u27A1\uFE0F Organizar documentação complementar, se necessário\n` +
+            `\u27A1\uFE0F Atualizar status no sistema após conclusão\n\n` +
+            `\uD83D\uDCC2 Caso precise de mais informações ou ajustes, fico à disposição!\n\n` +
+            `Vamos em frente \uD83D\uDE80\uD83D\uDCAA`;
         } else {
-          defaultMessage = `*PROJETO APROVADO PELA BIBLIOTECA!* 🎉\n\n` +
+          defaultMessage = `\uD83C\uDF89 *PROJETO APROVADO PELA BIBLIOTECA!* \uD83C\uDF89\n\n` +
             `Olá Professor ${professorProfile?.name || ''}, o projeto "${project.name}" foi aprovado pela coordenação/biblioteca e está pronto para os próximos passos!`;
         }
         
@@ -258,10 +258,10 @@ export default function ProjectDetail() {
       // Notify Valéria
       if (method === 'whatsapp') {
         const phone = '5524999847737'; // Valéria's number
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+        window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`, '_blank');
       } else {
         const email = 'vasouza@firjan.com.br';
-        window.open(`mailto:${email}?subject=Aprovação de Projeto: ${project?.name}&body=${encodeURIComponent(message)}`, '_blank');
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent('Aprovação de Projeto: ' + (project?.name || ''))}&body=${encodeURIComponent(message)}`;
       }
     } else {
       // Notify Professor
@@ -271,10 +271,10 @@ export default function ProjectDetail() {
       }
       if (method === 'whatsapp') {
         const phone = professorProfile.telefone.replace(/\D/g, '');
-        window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
+        window.open(`https://api.whatsapp.com/send?phone=55${phone}&text=${encodeURIComponent(message)}`, '_blank');
       } else {
         const email = professorProfile?.email || '';
-        window.open(`mailto:${email}?subject=Projeto Aprovado: ${project?.name}&body=${encodeURIComponent(message)}`, '_blank');
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent('Projeto Aprovado: ' + (project?.name || ''))}&body=${encodeURIComponent(message)}`;
       }
     }
     
