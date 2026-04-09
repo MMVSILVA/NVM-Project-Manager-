@@ -147,6 +147,44 @@ export default function Dashboard() {
     }
   };
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 200;
+        const MAX_HEIGHT = 200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setEditProfileData({ ...editProfileData, photoURL: dataUrl });
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const generateGlobalReport = async () => {
     const allProjects = await getAllProjects() as Project[];
     if (!allProjects || allProjects.length === 0) {
@@ -857,14 +895,18 @@ export default function Dashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">URL da Foto</label>
-                  <input
-                    type="text"
-                    value={editProfileData.photoURL}
-                    onChange={(e) => setEditProfileData({ ...editProfileData, photoURL: e.target.value })}
-                    placeholder="https://exemplo.com/foto.jpg"
-                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
-                  />
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Foto de Perfil</label>
+                  <div className="flex items-center gap-4">
+                    {editProfileData.photoURL && (
+                      <img src={editProfileData.photoURL} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-white/10" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
+                      className="w-full bg-black/50 border border-white/10 rounded-xl p-2 text-white focus:outline-none focus:border-neon-purple file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-neon-purple/20 file:text-neon-purple hover:file:bg-neon-purple/30 transition-all cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
 
