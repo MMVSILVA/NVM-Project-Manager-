@@ -218,14 +218,21 @@ export default function ProjectDetail() {
       if (isApproving) {
         let defaultMessage = '';
         if (type === 'Professor') {
-          defaultMessage = `*NOVO PROJETO APROVADO!* 🎉\n\n` +
-            `Olá Valéria, o projeto abaixo foi aprovado e está pronto para registro na biblioteca:\n\n` +
-            `📚 *Projeto:* ${project.name}\n` +
-            `👨‍🏫 *Professor:* ${project.professorName || 'Não informado'}\n` +
+          defaultMessage = `📢 *NOVO PROJETO APROVADO!* 🚀\n\n` +
+            `Olá, Valéria! Tudo bem? 😊\n\n` +
+            `Temos um novo projeto aprovado e pronto para seguir para a próxima etapa de registro na biblioteca. Seguem os detalhes:\n\n` +
+            `📌 *Projeto:* ${project.name}\n` +
+            `👨‍🏫 *Professor Responsável:* ${project.professorName || 'Não informado'}\n` +
             `🎓 *Curso:* ${project.curso || 'Não informado'}\n` +
-            `👥 *Turma:* ${project.turma || 'Não informado'}\n\n` +
-            `📝 *Descrição:*\n${project.description || 'Sem descrição'}\n\n` +
-            `Por favor, providenciar os próximos passos.`;
+            `👥 *Turma:* ${project.turma || 'Não informado'}\n` +
+            `📝 *Descrição:* ${project.description || 'Sem descrição'}\n\n` +
+            `⚙️ *Próximos Passos:*\n` +
+            `➡️ Realizar o registro do projeto na biblioteca\n` +
+            `➡️ Validar informações pendentes (professor responsável)\n` +
+            `➡️ Organizar documentação complementar, se necessário\n` +
+            `➡️ Atualizar status no sistema após conclusão\n\n` +
+            `📂 Caso precise de mais informações ou ajustes, fico à disposição!\n\n` +
+            `Vamos em frente 🚀💪`;
         } else {
           defaultMessage = `*PROJETO APROVADO PELA BIBLIOTECA!* 🎉\n\n` +
             `Olá Professor ${professorProfile?.name || ''}, o projeto "${project.name}" foi aprovado pela coordenação/biblioteca e está pronto para os próximos passos!`;
