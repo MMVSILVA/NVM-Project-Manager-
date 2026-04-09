@@ -79,6 +79,11 @@ export default function ProjectDetail() {
   const [valeriaEvalStatus, setValeriaEvalStatus] = useState<'approved' | 'reservations' | 'rejected'>('approved');
   const [valeriaEvalMessage, setValeriaEvalMessage] = useState('');
 
+  const isAdmin = auth.currentUser?.email === 'mmvsilva@firjan.com.br' || 
+                  auth.currentUser?.email === 'vasouza@firjan.com.br' || 
+                  auth.currentUser?.email === 'marcio.s@docente.firjan.senai.br' ||
+                  auth.currentUser?.email === 'marcio.v.silva@docente.firjan.senai.br';
+
   // Form states for sections
   const [canvasData, setCanvasData] = useState({
     parceiros: '',
@@ -602,7 +607,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Deadline Alert */}
-        {daysUntilDelivery !== null && daysUntilDelivery <= 40 && daysUntilDelivery >= 0 && (
+        {daysUntilDelivery !== null && daysUntilDelivery >= 0 && (
           <div className={`mb-8 p-4 rounded-xl border flex items-center justify-between ${daysUntilDelivery <= 10 ? 'bg-red-500/10 border-red-500/30 text-red-400' : daysUntilDelivery <= 20 ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
             <div className="flex items-center gap-3">
               <Clock className="w-6 h-6" />
@@ -611,7 +616,7 @@ export default function ProjectDetail() {
                 <p className="text-sm opacity-80">Faltam {daysUntilDelivery} dias para a entrega do projeto (30 dias antes do término do curso).</p>
               </div>
             </div>
-            {(daysUntilDelivery === 20 || daysUntilDelivery === 10) && auth.currentUser?.email === 'vasouza@firjan.com.br' && (
+            {(daysUntilDelivery === 20 || daysUntilDelivery === 10) && isAdmin && (
               <button 
                 onClick={() => handleNotifyDeadline(daysUntilDelivery)}
                 className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition-colors"
@@ -1278,11 +1283,11 @@ export default function ProjectDetail() {
                       type="datetime-local"
                       value={project.presentationDate || ''}
                       onChange={(e) => handleSaveSection('presentationDate', e.target.value)}
-                      disabled={auth.currentUser?.email !== 'vasouza@firjan.com.br'}
+                      disabled={!isAdmin}
                       className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all disabled:opacity-50"
                     />
                   </div>
-                  {auth.currentUser?.email === 'vasouza@firjan.com.br' && project.presentationDate && (
+                  {isAdmin && project.presentationDate && (
                     <button 
                       onClick={() => {
                         const date = new Date(project.presentationDate!).toLocaleString('pt-BR');

@@ -55,7 +55,7 @@ export default function Dashboard() {
   const [loadingIA, setLoadingIA] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [viewAll, setViewAll] = useState(false);
+  const [viewAll, setViewAll] = useState(true);
   const navigate = useNavigate();
 
   const isAdmin = auth.currentUser?.email === 'mmvsilva@firjan.com.br' || 
@@ -65,10 +65,10 @@ export default function Dashboard() {
 
   useEffect(() => {
     const unsubscribe = getProjects((projs) => {
-      if (isAdmin && !viewAll) {
-        setProjects(projs.filter(p => p.userId === auth.currentUser?.id));
+      if (isAdmin) {
+        setProjects(viewAll ? projs : projs.filter(p => p.userId === auth.currentUser?.id));
       } else {
-        setProjects(projs);
+        setProjects(projs.filter(p => p.userId === auth.currentUser?.id));
       }
     });
     
@@ -518,7 +518,7 @@ export default function Dashboard() {
               <div className="bg-dark-card p-6 rounded-2xl border border-white/5 flex flex-col">
                 <h3 className="text-lg font-bold mb-4 text-gray-400 text-center">Projetos por Curso</h3>
                 <div className="h-[300px] w-full min-h-[300px] flex-1">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={100}>
                     <BarChart data={projectsByCourse} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
                       <XAxis dataKey="name" stroke="#888" tick={{fill: '#888', fontSize: 12}} />
@@ -532,7 +532,7 @@ export default function Dashboard() {
               <div className="bg-dark-card p-6 rounded-2xl border border-white/5 flex flex-col">
                 <h3 className="text-lg font-bold mb-4 text-gray-400 text-center">Status de Aprovação (Professor)</h3>
                 <div className="h-[300px] w-full min-h-[300px] flex-1 relative">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={100}>
                     <PieChart>
                       <Pie
                         data={[
