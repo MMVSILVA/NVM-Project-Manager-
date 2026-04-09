@@ -67,6 +67,11 @@ export default function ProjectDetail() {
   const [editingTaskTitle, setEditingTaskTitle] = useState('');
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editingDescription, setEditingDescription] = useState('');
+  const [showApprovalModal, setShowApprovalModal] = useState<{
+    isOpen: boolean;
+    type: 'Professor' | 'Biblioteca' | null;
+    message: string;
+  }>({ isOpen: false, type: null, message: '' });
 
   // Form states for sections
   const [canvasData, setCanvasData] = useState({
@@ -210,13 +215,63 @@ export default function ProjectDetail() {
       await updateProject(id, { [field]: isApproving });
       setProject({ ...project, [field]: isApproving });
 
-      // Automate WhatsApp message to Valéria when Professor approves
-      if (type === 'Professor' && isApproving) {
-        handleNotifyValeria('whatsapp');
+      if (isApproving) {
+        let defaultMessage = '';
+        if (type === 'Professor') {
+          defaultMessage = `*NOVO PROJETO APROVADO!* 🎉\n\n` +
+            `Olá Valéria, o projeto abaixo foi aprovado e está pronto para registro na biblioteca:\n\n` +
+            `📚 *Projeto:* ${project.name}\n` +
+            `👨‍🏫 *Professor:* ${project.professorName || 'Não informado'}\n` +
+            `🎓 *Curso:* ${project.curso || 'Não informado'}\n` +
+            `👥 *Turma:* ${project.turma || 'Não informado'}\n\n` +
+            `📝 *Descrição:*\n${project.description || 'Sem descrição'}\n\n` +
+            `Por favor, providenciar os próximos passos.`;
+        } else {
+          defaultMessage = `*PROJETO APROVADO PELA BIBLIOTECA!* 🎉\n\n` +
+            `Olá Professor ${professorProfile?.name || ''}, o projeto "${project.name}" foi aprovado pela coordenação/biblioteca e está pronto para os próximos passos!`;
+        }
+        
+        setShowApprovalModal({
+          isOpen: true,
+          type,
+          message: defaultMessage
+        });
       }
     } catch (error) {
       console.error(`Error updating ${type} approval:`, error);
     }
+  };
+
+  const confirmApprovalNotification = (method: 'whatsapp' | 'email') => {
+    if (!showApprovalModal.type) return;
+    
+    const { type, message } = showApprovalModal;
+    
+    if (type === 'Professor') {
+      // Notify Valéria
+      if (method === 'whatsapp') {
+        const phone = '5524999847737'; // Valéria's number
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+      } else {
+        const email = 'vasouza@firjan.com.br';
+        window.open(`mailto:${email}?subject=Aprovação de Projeto: ${project?.name}&body=${encodeURIComponent(message)}`, '_blank');
+      }
+    } else {
+      // Notify Professor
+      if (!professorProfile || !professorProfile.telefone) {
+        alert('Telefone do professor não encontrado no cadastro. O e-mail será utilizado se disponível.');
+        if (method === 'whatsapp') return;
+      }
+      if (method === 'whatsapp') {
+        const phone = professorProfile.telefone.replace(/\D/g, '');
+        window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, '_blank');
+      } else {
+        const email = professorProfile?.email || '';
+        window.open(`mailto:${email}?subject=Projeto Aprovado: ${project?.name}&body=${encodeURIComponent(message)}`, '_blank');
+      }
+    }
+    
+    setShowApprovalModal({ isOpen: false, type: null, message: '' });
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
@@ -1125,6 +1180,67 @@ export default function ProjectDetail() {
           </div>
           <div>© 2026 Project Hub Educacional - SENAI VR TODOS OS DIREITOS RESERVADOS</div>
         </footer>
+        {/* Approval Notification Modal */}
+        <AnimatePresence>
+          {showApprovalModal.isOpen && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-dark-card border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+              >
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 rounded-full bg-neon-green/20 flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-neon-green" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">Projeto Aprovado!</h3>
+                    <p className="text-sm text-gray-400">
+                      {showApprovalModal.type === 'Professor' 
+                        ? 'Notifique a Valéria (Biblioteca) sobre a aprovação.' 
+                        : 'Notifique o Professor sobre a aprovação.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Mensagem Personalizada
+                  </label>
+                  <textarea
+                    value={showApprovalModal.message}
+                    onChange={(e) => setShowApprovalModal({ ...showApprovalModal, message: e.target.value })}
+                    className="w-full h-48 bg-black/50 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-neon-purple resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowApprovalModal({ isOpen: false, type: null, message: '' })}
+                    className="flex-1 px-4 py-3 rounded-xl border border-white/10 hover:bg-white/5 transition-colors text-white font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => confirmApprovalNotification('email')}
+                    className="flex-1 px-4 py-3 rounded-xl bg-blue-500/20 text-blue-500 border border-blue-500/30 hover:bg-blue-500/30 transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    <Mail className="w-5 h-5" />
+                    E-mail
+                  </button>
+                  <button
+                    onClick={() => confirmApprovalNotification('whatsapp')}
+                    className="flex-1 px-4 py-3 rounded-xl bg-green-500/20 text-green-500 border border-green-500/30 hover:bg-green-500/30 transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    WhatsApp
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -28,6 +28,6 @@
   <!-- SENA in Blue, I in Orange -->
   <text x="250" y="105" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" font-size="90" text-anchor="middle" class="animated-text">
     <tspan fill="#005099" letter-spacing="2">SENA</tspan>
-    <tspan fill="#F26A21" dx="15">I</tspan>
+    <tspan fill="#F26A21" dx="2">I</tspan>
   </text>
 </svg>

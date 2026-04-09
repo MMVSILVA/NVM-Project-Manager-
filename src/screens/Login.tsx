@@ -124,7 +124,7 @@ export default function Login() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-dark-bg p-4 overflow-hidden relative">
       {/* Background Glows */}
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-neon-purple/20 blur-[100px] rounded-full" />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-neon-green/20 blur-[100px] rounded-full" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-neon-purple/20 blur-[100px] rounded-full" />
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -141,7 +141,7 @@ export default function Login() {
         </div>
         
         <p className="text-xl text-gray-400 mb-8 mx-auto">
-          Acesso restrito para <span className="text-neon-purple font-bold">Professores Orientadores</span>.
+          Acesso restrito para <span className="text-[#F26A21] font-bold">Professores Orientadores</span>.
         </p>
 
         <div className="bg-dark-card p-8 rounded-3xl border border-white/5 shadow-2xl">
@@ -244,7 +244,7 @@ export default function Login() {
             <button 
               type="submit"
               disabled={loading}
-              className="neon-button-green w-full flex items-center justify-center gap-3 text-lg py-4"
+              className="neon-button w-full flex items-center justify-center gap-3 text-lg py-4 font-bold"
             >
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-black" />
