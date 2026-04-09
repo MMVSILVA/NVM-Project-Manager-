@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { auth, logout, getUserProfile } from '../services/supabase';
+import { auth, logout, getUserProfile, saveUserProfile } from '../services/supabase';
 import { getProjects, createProject, deleteProject, getAllProjects } from '../services/projetos';
 import { createTask } from '../services/atividades';
 import { generateProjectDescription, generateTasks } from '../services/ia';
-import { Plus, Trash2, LogOut, Sparkles, FolderKanban, ArrowRight, Loader2, Search, FileText, Calendar as CalendarIcon, Download } from 'lucide-react';
+import { Plus, Trash2, LogOut, Sparkles, FolderKanban, ArrowRight, Loader2, Search, FileText, Calendar as CalendarIcon, Download, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import ExcelJS from 'exceljs';
@@ -40,6 +40,11 @@ interface Project {
   banner?: string;
   prototipo?: string;
   pitch?: string;
+  professorFinalApproval?: boolean;
+  sagaDate?: string;
+  sagaRegistered?: boolean;
+  presentationCompleted?: boolean;
+  status?: 'active' | 'archived';
   createdAt?: any;
 }
 
@@ -56,6 +61,8 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [userProfile, setUserProfile] = useState<any>(null);
   const [viewAll, setViewAll] = useState(true);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editProfileData, setEditProfileData] = useState({ name: '', matricula: '', telefone: '', photoURL: '' });
   const navigate = useNavigate();
 
   const isAdmin = auth.currentUser?.email === 'mmvsilva@firjan.com.br' || 
@@ -129,6 +136,17 @@ export default function Dashboard() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (auth.currentUser) {
+      await saveUserProfile(auth.currentUser.id, {
+        ...editProfileData,
+        email: auth.currentUser.email || ''
+      });
+      setUserProfile({ ...userProfile, ...editProfileData });
+      setShowEditProfileModal(false);
+    }
+  };
+
   const generateGlobalReport = async () => {
     const allProjects = await getAllProjects() as Project[];
     if (!allProjects || allProjects.length === 0) {
@@ -140,16 +158,55 @@ export default function Dashboard() {
     wb.creator = 'Firjan SENAI';
     wb.created = new Date();
 
-    // --- TAB 1: DASHBOARD ---
-    const wsDash = wb.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+    // Try to add logo
+    try {
+      const response = await fetch('/logo-senai.svg');
+      const svgText = await response.text();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const v = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgText)));
+      });
+      canvas.width = v.width;
+      canvas.height = v.height;
+      ctx?.drawImage(v, 0, 0);
+      const base64Image = canvas.toDataURL('image/png');
+      const imageId = wb.addImage({
+        base64: base64Image,
+        extension: 'png',
+      });
+      
+      // --- TAB 1: DASHBOARD ---
+      const wsDash = wb.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+      wsDash.addImage(imageId, {
+        tl: { col: 0, row: 0 },
+        ext: { width: 150, height: 50 }
+      });
+      
+      // Title
+      wsDash.mergeCells('A1:E2');
+      const titleCell = wsDash.getCell('A1');
+      titleCell.value = 'DASHBOARD GERAL DE PROJETOS - FIRJAN SENAI';
+      titleCell.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } }; // Firjan Blue
+      titleCell.alignment = { vertical: 'middle', horizontal: 'right' }; // Align right to leave space for logo
+    } catch (e) {
+      console.error('Error adding logo to Excel', e);
+      // Fallback if logo fails
+      const wsDash = wb.addWorksheet('Dashboard', { views: [{ showGridLines: false }] });
+      wsDash.mergeCells('A1:E2');
+      const titleCell = wsDash.getCell('A1');
+      titleCell.value = 'DASHBOARD GERAL DE PROJETOS - FIRJAN SENAI';
+      titleCell.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+      titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    }
 
-    // Title
-    wsDash.mergeCells('A1:E2');
-    const titleCell = wsDash.getCell('A1');
-    titleCell.value = 'DASHBOARD GERAL DE PROJETOS - FIRJAN SENAI';
-    titleCell.font = { size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
-    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } }; // Firjan Blue
-    titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    const wsDash = wb.getWorksheet('Dashboard');
+    if (!wsDash) return;
 
     // Metrics
     const totalProjects = allProjects.length;
@@ -236,11 +293,19 @@ export default function Dashboard() {
       { header: 'Nome do Projeto', key: 'name', width: 40 },
       { header: 'Curso', key: 'curso', width: 30 },
       { header: 'Turma', key: 'turma', width: 15 },
+      { header: 'Professor Responsável', key: 'professorName', width: 30 },
       { header: 'Descrição', key: 'description', width: 60 },
       { header: 'Data Início', key: 'startDate', width: 15 },
       { header: 'Data Término', key: 'endDate', width: 15 },
-      { header: 'Aprovação Prof.', key: 'appProf', width: 20 },
-      { header: 'Aprovação Bib.', key: 'appBib', width: 20 },
+      { header: 'Aprovação Prof.', key: 'appProf', width: 15 },
+      { header: 'Status Biblioteca', key: 'appBibStatus', width: 20 },
+      { header: 'Mensagem Biblioteca', key: 'appBibMsg', width: 40 },
+      { header: 'Finalizado Prof.', key: 'profFinal', width: 15 },
+      { header: 'Data Saga', key: 'sagaDate', width: 20 },
+      { header: 'Registrado Saga', key: 'sagaReg', width: 15 },
+      { header: 'Data Apresentação', key: 'presDate', width: 20 },
+      { header: 'Apresentado', key: 'presComp', width: 15 },
+      { header: 'Status Geral', key: 'status', width: 15 },
       { header: 'Data de Criação', key: 'createdAt', width: 20 },
     ];
 
@@ -248,7 +313,7 @@ export default function Dashboard() {
     wsData.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
     wsData.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0055A4' } };
     wsData.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
-    wsData.autoFilter = 'A1:J1';
+    wsData.autoFilter = 'A1:R1';
 
     // Add Data
     allProjects.forEach(p => {
@@ -257,11 +322,19 @@ export default function Dashboard() {
         name: p.name,
         curso: p.curso,
         turma: p.turma,
+        professorName: p.professorName || 'Não informado',
         description: p.description,
         startDate: p.startDate,
         endDate: p.endDate,
         appProf: p.approvalProfessor ? 'SIM' : 'NÃO',
-        appBib: p.approvalBiblioteca ? 'SIM' : 'NÃO',
+        appBibStatus: p.approvalBibliotecaStatus === 'approved' ? 'Aprovado' : p.approvalBibliotecaStatus === 'reservations' ? 'Com Ressalvas' : p.approvalBibliotecaStatus === 'rejected' ? 'Reprovado' : 'Pendente',
+        appBibMsg: p.approvalBibliotecaMessage || '',
+        profFinal: p.professorFinalApproval ? 'SIM' : 'NÃO',
+        sagaDate: p.sagaDate ? new Date(p.sagaDate).toLocaleString('pt-BR') : '',
+        sagaReg: p.sagaRegistered ? 'SIM' : 'NÃO',
+        presDate: p.presentationDate ? new Date(p.presentationDate).toLocaleString('pt-BR') : '',
+        presComp: p.presentationCompleted ? 'SIM' : 'NÃO',
+        status: p.status === 'archived' ? 'Arquivado' : 'Ativo',
         createdAt: p.createdAt ? new Date(p.createdAt).toLocaleDateString() : 'N/A'
       });
     });
@@ -277,6 +350,58 @@ export default function Dashboard() {
         };
         if (rowNumber > 1) {
           cell.alignment = { vertical: 'middle', wrapText: true };
+        }
+      });
+      if (rowNumber > 1 && rowNumber % 2 === 0) {
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+      }
+    });
+
+    // --- TAB 3: CANVAS E DETALHES ---
+    const wsCanvas = wb.addWorksheet('Canvas e Detalhes');
+    wsCanvas.columns = [
+      { header: 'Nome do Projeto', key: 'name', width: 40 },
+      { header: 'Parceiros', key: 'parceiros', width: 40 },
+      { header: 'Atividades', key: 'atividades', width: 40 },
+      { header: 'Recursos', key: 'recursos', width: 40 },
+      { header: 'Proposta de Valor', key: 'proposta', width: 40 },
+      { header: 'Relacionamento', key: 'relacionamento', width: 40 },
+      { header: 'Canais', key: 'canais', width: 40 },
+      { header: 'Segmentos', key: 'segmentos', width: 40 },
+      { header: 'Custos', key: 'custos', width: 40 },
+      { header: 'Receitas', key: 'receitas', width: 40 },
+    ];
+
+    wsCanvas.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    wsCanvas.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF26A21' } }; // Orange
+    wsCanvas.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    wsCanvas.autoFilter = 'A1:J1';
+
+    allProjects.forEach(p => {
+      wsCanvas.addRow({
+        name: p.name,
+        parceiros: p.canvasParceiros || '',
+        atividades: p.canvasAtividades || '',
+        recursos: p.canvasRecursos || '',
+        proposta: p.canvasProposta || '',
+        relacionamento: p.canvasRelacionamento || '',
+        canais: p.canvasCanais || '',
+        segmentos: p.canvasSegmentos || '',
+        custos: p.canvasCustos || '',
+        receitas: p.canvasReceitas || ''
+      });
+    });
+
+    wsCanvas.eachRow((row, rowNumber) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: {style:'thin', color: {argb:'FFDDDDDD'}},
+          left: {style:'thin', color: {argb:'FFDDDDDD'}},
+          bottom: {style:'thin', color: {argb:'FFDDDDDD'}},
+          right: {style:'thin', color: {argb:'FFDDDDDD'}}
+        };
+        if (rowNumber > 1) {
+          cell.alignment = { vertical: 'top', wrapText: true };
         }
       });
       if (rowNumber > 1 && rowNumber % 2 === 0) {
@@ -379,7 +504,22 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10">
+          <div className="flex flex-col items-center gap-2 px-4 py-3 bg-dark-card rounded-2xl border border-white/10 relative group">
+            <button 
+              onClick={() => {
+                setEditProfileData({
+                  name: userProfile?.name || '',
+                  matricula: userProfile?.matricula || '',
+                  telefone: userProfile?.telefone || '',
+                  photoURL: userProfile?.photoURL || ''
+                });
+                setShowEditProfileModal(true);
+              }}
+              className="absolute top-2 right-2 p-1.5 bg-white/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
+              title="Editar Perfil"
+            >
+              <Edit2 className="w-3 h-3" />
+            </button>
             <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-neon-purple shadow-[0_0_15px_rgba(0,80,153,0.3)]">
               {userProfile?.photoURL ? (
                 <img src={userProfile.photoURL} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -672,6 +812,80 @@ export default function Dashboard() {
           <div>© 2026 Project Hub Educacional - SENAI VR TODOS OS DIREITOS RESERVADOS</div>
         </footer>
       </main>
+
+      {/* Edit Profile Modal */}
+      <AnimatePresence>
+        {showEditProfileModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-dark-card border border-white/10 rounded-2xl p-6 w-full max-w-lg shadow-2xl"
+            >
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-neon-purple" /> Editar Perfil
+              </h3>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Nome Completo</label>
+                  <input
+                    type="text"
+                    value={editProfileData.name}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, name: e.target.value })}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Matrícula</label>
+                  <input
+                    type="text"
+                    value={editProfileData.matricula}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, matricula: e.target.value })}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Telefone (WhatsApp)</label>
+                  <input
+                    type="text"
+                    value={editProfileData.telefone}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, telefone: e.target.value })}
+                    placeholder="Ex: 24999999999"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">URL da Foto</label>
+                  <input
+                    type="text"
+                    value={editProfileData.photoURL}
+                    onChange={(e) => setEditProfileData({ ...editProfileData, photoURL: e.target.value })}
+                    placeholder="https://exemplo.com/foto.jpg"
+                    className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-neon-purple"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowEditProfileModal(false)}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 hover:bg-white/10 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleSaveProfile}
+                  className="flex-1 py-3 rounded-xl font-bold text-sm bg-neon-purple text-white hover:bg-neon-purple/80 transition-colors"
+                >
+                  Salvar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

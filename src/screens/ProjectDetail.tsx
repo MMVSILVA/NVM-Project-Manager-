@@ -43,6 +43,11 @@ interface Project {
   approvalBibliotecaStatus?: 'approved' | 'reservations' | 'rejected' | 'pending';
   approvalBibliotecaMessage?: string;
   presentationDate?: string;
+  professorFinalApproval?: boolean;
+  sagaDate?: string;
+  sagaRegistered?: boolean;
+  presentationCompleted?: boolean;
+  status?: 'active' | 'archived';
   createdAt?: any;
 }
 
@@ -1268,44 +1273,198 @@ export default function ProjectDetail() {
                 )}
               </div>
 
-              {/* Presentation Date Section */}
-              <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold mb-1">3. Data de Apresentação</h3>
-                    <p className="text-sm text-gray-500">Agendamento da apresentação final do projeto.</p>
+              {/* Step 3: Professor Final Approval */}
+              {project.approvalBibliotecaStatus === 'approved' && (
+                <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">3. Finalização do Professor</h3>
+                      <p className="text-sm text-gray-500">Aprovação final após o retorno da Biblioteca.</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border ${
+                        project.professorFinalApproval 
+                          ? 'bg-neon-green/10 text-neon-green border-neon-green/30' 
+                          : 'bg-white/5 text-gray-400 border-white/10'
+                      }`}>
+                        {project.professorFinalApproval ? 'Finalizado' : 'Pendente'}
+                      </div>
+                      {isProfessor && !project.professorFinalApproval && (
+                        <button 
+                          onClick={async () => {
+                            await updateProject(id!, { professorFinalApproval: true });
+                            setProject({ ...project, professorFinalApproval: true });
+                            const message = `✅ *PROJETO FINALIZADO PELO PROFESSOR!* ✅\n\nOlá Valéria, o projeto "${project.name}" foi finalizado pelo professor e está pronto para agendamento no Saga Senai.`;
+                            setShowApprovalModal({
+                              isOpen: true,
+                              type: 'Biblioteca',
+                              message
+                            });
+                          }}
+                          className="px-6 py-3 bg-neon-green text-black rounded-xl hover:bg-neon-green/80 transition-all font-bold text-sm"
+                        >
+                          FINALIZAR PROJETO
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-end gap-4">
-                  <div className="flex-1">
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Data e Hora</label>
-                    <input 
-                      type="datetime-local"
-                      value={project.presentationDate || ''}
-                      onChange={(e) => handleSaveSection('presentationDate', e.target.value)}
-                      disabled={!isAdmin}
-                      className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all disabled:opacity-50"
-                    />
+              )}
+
+              {/* Step 4: Saga Senai Scheduling (Valeria) */}
+              {project.professorFinalApproval && (
+                <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">4. Agendamento Saga Senai</h3>
+                      <p className="text-sm text-gray-500">Data para registro na plataforma Saga Senai.</p>
+                    </div>
                   </div>
-                  {isAdmin && project.presentationDate && (
-                    <button 
-                      onClick={() => {
-                        const date = new Date(project.presentationDate!).toLocaleString('pt-BR');
-                        const message = `📅 *DATA DE APRESENTAÇÃO AGENDADA!* 📅\n\nOlá Professor ${professorProfile?.name || ''}, a apresentação do projeto "${project.name}" foi agendada para:\n\n*${date}*\n\nPor favor, avise os alunos.`;
-                        setShowApprovalModal({
-                          isOpen: true,
-                          type: 'Biblioteca',
-                          message
-                        });
-                      }}
-                      className="px-6 py-4 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-xl hover:bg-neon-purple/30 transition-all font-bold text-sm flex items-center gap-2"
-                    >
-                      <Mail className="w-4 h-4" />
-                      Notificar Professor
-                    </button>
+                  <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Data e Hora</label>
+                      <input 
+                        type="datetime-local"
+                        value={project.sagaDate || ''}
+                        onChange={(e) => handleSaveSection('sagaDate', e.target.value)}
+                        disabled={!isAdmin}
+                        className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all disabled:opacity-50"
+                      />
+                    </div>
+                    {isAdmin && project.sagaDate && (
+                      <button 
+                        onClick={() => {
+                          const date = new Date(project.sagaDate!).toLocaleString('pt-BR');
+                          const message = `📅 *AGENDAMENTO SAGA SENAI!* 📅\n\nOlá Professor ${professorProfile?.name || ''}, o registro do projeto "${project.name}" no Saga Senai foi agendado para:\n\n*${date}*\n\nPor favor, organize-se com a turma.`;
+                          setShowApprovalModal({
+                            isOpen: true,
+                            type: 'Professor',
+                            message
+                          });
+                        }}
+                        className="px-6 py-4 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-xl hover:bg-neon-purple/30 transition-all font-bold text-sm flex items-center gap-2"
+                      >
+                        <Mail className="w-4 h-4" />
+                        Notificar Professor
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 5: Saga Registration Confirmation (Professor) */}
+              {project.sagaDate && (
+                <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">5. Cadastro na Plataforma Saga Senai</h3>
+                      <p className="text-sm text-gray-500">Confirmação de que o projeto foi registrado no Saga.</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border ${
+                        project.sagaRegistered 
+                          ? 'bg-neon-green/10 text-neon-green border-neon-green/30' 
+                          : 'bg-white/5 text-gray-400 border-white/10'
+                      }`}>
+                        {project.sagaRegistered ? 'Registrado' : 'Pendente'}
+                      </div>
+                      {isProfessor && !project.sagaRegistered && (
+                        <button 
+                          onClick={async () => {
+                            await updateProject(id!, { sagaRegistered: true });
+                            setProject({ ...project, sagaRegistered: true });
+                          }}
+                          className="px-6 py-3 bg-neon-green text-black rounded-xl hover:bg-neon-green/80 transition-all font-bold text-sm flex items-center gap-2"
+                        >
+                          <CheckCircle2 className="w-4 h-4" /> APROVADO / OK
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 6: Presentation Date Section */}
+              {project.sagaRegistered && (
+                <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">6. Data de Apresentação</h3>
+                      <p className="text-sm text-gray-500">Agendamento da apresentação final do projeto.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Data e Hora</label>
+                      <input 
+                        type="datetime-local"
+                        value={project.presentationDate || ''}
+                        onChange={(e) => handleSaveSection('presentationDate', e.target.value)}
+                        disabled={!isAdmin}
+                        className="w-full bg-black/30 border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-neon-purple transition-all disabled:opacity-50"
+                      />
+                    </div>
+                    {isAdmin && project.presentationDate && (
+                      <button 
+                        onClick={() => {
+                          const date = new Date(project.presentationDate!).toLocaleString('pt-BR');
+                          const message = `📅 *DATA DE APRESENTAÇÃO AGENDADA!* 📅\n\nOlá Professor ${professorProfile?.name || ''}, a apresentação do projeto "${project.name}" foi agendada para:\n\n*${date}*\n\nPor favor, avise os alunos.`;
+                          setShowApprovalModal({
+                            isOpen: true,
+                            type: 'Professor',
+                            message
+                          });
+                        }}
+                        className="px-6 py-4 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-xl hover:bg-neon-purple/30 transition-all font-bold text-sm flex items-center gap-2"
+                      >
+                        <Mail className="w-4 h-4" />
+                        Notificar Professor
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 7: Presentation Confirmation (Professor) */}
+              {project.presentationDate && (
+                <div className="p-8 rounded-2xl border bg-dark-card border-white/5 mt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold mb-1">7. Apresentação Realizada</h3>
+                      <p className="text-sm text-gray-500">Confirmação de que a apresentação ocorreu com sucesso.</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest border ${
+                        project.presentationCompleted 
+                          ? 'bg-neon-green/10 text-neon-green border-neon-green/30' 
+                          : 'bg-white/5 text-gray-400 border-white/10'
+                      }`}>
+                        {project.presentationCompleted ? 'Concluído' : 'Pendente'}
+                      </div>
+                      {isProfessor && !project.presentationCompleted && (
+                        <button 
+                          onClick={async () => {
+                            await updateProject(id!, { presentationCompleted: true, status: 'archived' });
+                            setProject({ ...project, presentationCompleted: true, status: 'archived' });
+                          }}
+                          className="px-6 py-3 bg-neon-green text-black rounded-xl hover:bg-neon-green/80 transition-all font-bold text-sm flex items-center gap-2"
+                        >
+                          <CheckCircle2 className="w-4 h-4" /> APROVADO / OK
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {project.status === 'archived' && (
+                    <div className="mt-6 p-4 bg-neon-green/10 border border-neon-green/30 rounded-xl flex items-center gap-3 text-neon-green">
+                      <CheckCircle2 className="w-6 h-6" />
+                      <div>
+                        <h4 className="font-bold">Projeto Finalizado e Arquivado!</h4>
+                        <p className="text-sm opacity-80">Todas as etapas foram concluídas com sucesso.</p>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
